@@ -1,0 +1,501 @@
+// MixPrint database schema.
+// Money is stored as integer minor units (paisa for PKR) to avoid floating point errors.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Accounts & authentication ────────────────────────────────────────────────
+
+enum Role {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique // always stored lower-cased
+  name             String
+  phone            String? // E.164, e.g. +923001234567 (needed for JazzCash / Easypaisa)
+  passwordHash     String
+  role             Role      @default(CUSTOMER)
+  emailVerifiedAt  DateTime?
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  sessions       Session[]
+  addresses      Address[]
+  cart           Cart?
+  orders         Order[]
+  designRequests DesignRequest[]
+  messages       Message[]
+  files          FileAsset[]
+  affiliate      Affiliate?
+  statusEvents   OrderStatusEvent[]
+  proofsCreated  Proof[]            @relation("ProofCreatedBy")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique // SHA-256 of the cookie token; the raw token is never stored
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+  ipAddress  String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String? // "Home", "Office"
+  fullName   String
+  phone      String
+  line1      String
+  line2      String?
+  city       String
+  province   String
+  postalCode String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─── Catalog ──────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  imageUrl    String?
+  sortOrder   Int        @default(0)
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryTree")
+  products    Product[]
+}
+
+model Product {
+  id                  String   @id @default(cuid())
+  name                String
+  slug                String   @unique
+  summary             String?
+  description         String
+  categoryId          String
+  category            Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  basePriceMinor      Int // per-unit price when no quantity tier applies
+  minQuantity         Int      @default(1)
+  quantityStep        Int      @default(1)
+  turnaroundDays      Int      @default(3)
+  isActive            Boolean  @default(true)
+  isFeatured          Boolean  @default(false)
+  allowsDesignService Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  images         ProductImage[]
+  options        ProductOption[]
+  priceTiers     PriceTier[]
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  designRequests DesignRequest[]
+
+  @@index([categoryId, isActive])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String
+  sortOrder Int     @default(0) // lowest sortOrder is the primary image
+
+  @@index([productId, sortOrder])
+}
+
+// Volume pricing: the highest tier whose minQuantity <= ordered quantity applies.
+model PriceTier {
+  id             String  @id @default(cuid())
+  productId      String
+  product        Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  minQuantity    Int
+  unitPriceMinor Int
+
+  @@unique([productId, minQuantity])
+}
+
+// Configurable attributes such as Size, Paper Stock, Finish, Sides.
+model ProductOption {
+  id        String               @id @default(cuid())
+  productId String
+  product   Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int                  @default(0)
+  values    ProductOptionValue[]
+
+  @@unique([productId, name])
+}
+
+model ProductOptionValue {
+  id              String        @id @default(cuid())
+  optionId        String
+  option          ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  label           String
+  priceDeltaMinor Int           @default(0) // added to the unit price
+  sortOrder       Int           @default(0)
+
+  @@unique([optionId, label])
+}
+
+// ─── Cart ─────────────────────────────────────────────────────────────────────
+
+model Cart {
+  id             String     @id @default(cuid())
+  userId         String?    @unique
+  user           User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestTokenHash String?    @unique // SHA-256 of the guest cart cookie
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  items          CartItem[]
+}
+
+model CartItem {
+  id             String   @id @default(cuid())
+  cartId         String
+  cart           Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity       Int
+  optionValueIds String[] // selected ProductOptionValue ids
+  configKey      String // sorted option value ids joined; identifies identical configurations
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([cartId, productId, configKey])
+}
+
+// ─── Orders & tracking ────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAYMENT_REVIEW // e.g. bank transfer awaiting manual confirmation
+  CONFIRMED
+  IN_DESIGN
+  AWAITING_PROOF_APPROVAL
+  IN_PRODUCTION
+  READY_TO_SHIP
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  number          String      @unique // human friendly, e.g. MP-260001
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  status          OrderStatus @default(PENDING_PAYMENT)
+  currency        String      @default("PKR")
+  subtotalMinor   Int
+  shippingMinor   Int         @default(0)
+  discountMinor   Int         @default(0)
+  totalMinor      Int
+  shippingAddress Json // snapshot of the address at checkout
+  customerNotes   String?
+  courier         String? // TCS, Leopards, M&P, PostEx…
+  trackingNumber  String?
+  affiliateId     String?
+  affiliate       Affiliate?  @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+  placedAt        DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  items         OrderItem[]
+  payments      Payment[]
+  statusEvents  OrderStatusEvent[]
+  proofs        Proof[]
+  conversation  Conversation?
+  commission    AffiliateCommission?
+  designRequest DesignRequest?
+
+  @@index([userId, placedAt])
+  @@index([status])
+}
+
+model OrderItem {
+  id             String     @id @default(cuid())
+  orderId        String
+  order          Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName    String // snapshot
+  optionsSummary Json // snapshot: [{ option: "Size", value: "A4" }]
+  quantity       Int
+  unitPriceMinor Int
+  lineTotalMinor Int
+  artworkFileId  String?
+  artworkFile    FileAsset? @relation(fields: [artworkFileId], references: [id], onDelete: SetNull)
+  proofs         Proof[]
+}
+
+model OrderStatusEvent {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status      OrderStatus
+  note        String?
+  createdById String?
+  createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime    @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+// ─── Payments (JazzCash / Easypaisa first) ────────────────────────────────────
+
+enum PaymentProvider {
+  JAZZCASH
+  EASYPAISA
+  CASH_ON_DELIVERY
+  BANK_TRANSFER
+}
+
+enum PaymentMethod {
+  MOBILE_WALLET // JazzCash MWALLET / Easypaisa MA
+  CARD // hosted card checkout via JazzCash or Easypaisa
+  VOUCHER // JazzCash OTC / Easypaisa shop voucher
+  COD
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING // waiting on customer (wallet approval, OTC voucher payment)
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+}
+
+model Payment {
+  id                   String          @id @default(cuid())
+  orderId              String
+  order                Order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  provider             PaymentProvider
+  method               PaymentMethod
+  status               PaymentStatus   @default(INITIATED)
+  amountMinor          Int
+  currency             String          @default("PKR")
+  txnRef               String          @unique // our reference sent to the gateway (pp_TxnRefNo / orderRefNum)
+  providerTxnId        String? // gateway's own transaction id
+  providerResponseCode String?
+  providerMessage      String?
+  walletMobile         String? // payer mobile for wallet payments
+  voucherExpiresAt     DateTime?
+  requestPayload       Json? // signed request sent (secrets stripped)
+  responsePayload      Json? // last callback / inquiry response
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([orderId])
+  @@index([status, createdAt])
+}
+
+// ─── Files, design requests & proofs ─────────────────────────────────────────
+
+enum FileKind {
+  ARTWORK
+  REFERENCE
+  PROOF
+  CHAT_ATTACHMENT
+  PRODUCT_IMAGE
+}
+
+model FileAsset {
+  id           String   @id @default(cuid())
+  ownerId      String?
+  owner        User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  kind         FileKind
+  storageKey   String   @unique // path in local disk / S3 / R2
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime @default(now())
+
+  orderItems     OrderItem[]
+  proofs         Proof[]
+  messages       Message[]
+  designRequests DesignRequestFile[]
+}
+
+enum DesignRequestStatus {
+  SUBMITTED
+  QUOTED
+  IN_PROGRESS
+  PROOF_SENT
+  APPROVED
+  CANCELLED
+}
+
+model DesignRequest {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  orderId     String?             @unique
+  order       Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  title       String
+  brief       String
+  budgetMinor Int?
+  quoteMinor  Int?
+  neededBy    DateTime?
+  status      DesignRequestStatus @default(SUBMITTED)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  files        DesignRequestFile[]
+  proofs       Proof[]
+  conversation Conversation?
+
+  @@index([userId, createdAt])
+}
+
+model DesignRequestFile {
+  designRequestId String
+  designRequest   DesignRequest @relation(fields: [designRequestId], references: [id], onDelete: Cascade)
+  fileId          String
+  file            FileAsset     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([designRequestId, fileId])
+}
+
+enum ProofStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  SUPERSEDED
+}
+
+model Proof {
+  id              String         @id @default(cuid())
+  version         Int
+  status          ProofStatus    @default(PENDING)
+  fileId          String
+  file            FileAsset      @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  orderId         String?
+  order           Order?         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItemId     String?
+  orderItem       OrderItem?     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  designRequestId String?
+  designRequest   DesignRequest? @relation(fields: [designRequestId], references: [id], onDelete: Cascade)
+  staffNote       String?
+  customerComment String?
+  createdById     String?
+  createdBy       User?          @relation("ProofCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime       @default(now())
+  respondedAt     DateTime?
+
+  @@index([orderId])
+  @@index([designRequestId])
+}
+
+// ─── Chat (one conversation per order or design request) ─────────────────────
+
+model Conversation {
+  id              String         @id @default(cuid())
+  orderId         String?        @unique
+  order           Order?         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  designRequestId String?        @unique
+  designRequest   DesignRequest? @relation(fields: [designRequestId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  messages        Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  attachmentId   String?
+  attachment     FileAsset?   @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// ─── Affiliate marketing ──────────────────────────────────────────────────────
+
+enum AffiliateStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+enum CommissionStatus {
+  PENDING // order not yet delivered / inside refund window
+  APPROVED
+  PAID
+  REVERSED
+}
+
+model Affiliate {
+  id                String           @id @default(cuid())
+  userId            String           @unique
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code              String           @unique
+  status            AffiliateStatus  @default(PENDING)
+  commissionRateBps Int              @default(500) // 500 bps = 5%
+  payoutMethod      PaymentProvider? // JAZZCASH / EASYPAISA / BANK_TRANSFER
+  payoutAccount     String?
+  createdAt         DateTime         @default(now())
+
+  clicks      AffiliateClick[]
+  commissions AffiliateCommission[]
+  orders      Order[]
+}
+
+model AffiliateClick {
+  id          String    @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  landingPath String
+  ipHash      String? // hashed, never the raw IP
+  createdAt   DateTime  @default(now())
+
+  @@index([affiliateId, createdAt])
+}
+
+model AffiliateCommission {
+  id          String           @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate        @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  orderId     String           @unique
+  order       Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amountMinor Int
+  status      CommissionStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  paidAt      DateTime?
+}

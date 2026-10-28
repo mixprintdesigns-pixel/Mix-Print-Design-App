@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <rect width="800" height="600" fill="#fef9c3"/>
+  <g transform="rotate(-5 400 300)">
+    <rect x="190" y="150" width="420" height="270" rx="18" fill="#ffffff" stroke="#ca8a04" stroke-width="4"/>
+    <rect x="190" y="150" width="140" height="270" rx="18" fill="#ca8a04" opacity="0.9"/>
+    <circle cx="260" cy="230" r="34" fill="#ffffff" opacity="0.85"/>
+    <rect x="360" y="200" width="200" height="18" rx="9" fill="#ca8a04"/>
+    <rect x="360" y="235" width="150" height="12" rx="6" fill="#ca8a04" opacity="0.5"/>
+    <rect x="360" y="260" width="170" height="12" rx="6" fill="#ca8a04" opacity="0.35"/>
+  </g>
+  <text x="400" y="510" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#ca8a04">Die-cut Stickers</text>
+  <text x="400" y="552" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#ca8a04" opacity="0.7">Sheet</text>
+</svg>
