@@ -8,6 +8,7 @@ import {
   getOrCreateUserCartId,
   mergeGuestCartIntoUser,
   removeCartItem,
+  updateCartItemOptions,
   updateCartItemQuantity,
 } from "@/lib/cart/service";
 import { createTestProduct, resetDatabase } from "../support/db";
@@ -61,9 +62,14 @@ describe("adding to cart", () => {
     const cartId = await createGuestCart("guest-hash");
     await expect(addCartItem(cartId, { productId: product.id, quantity: 50, optionValueIds: [matte, single] })).rejects.toThrow(/Minimum/);
     await expect(addCartItem(cartId, { productId: product.id, quantity: 150, optionValueIds: [matte, single] })).rejects.toThrow(/steps/);
-    const hidden = await createTestProduct({ isActive: false });
+    const hidden = await createTestProduct({ status: "DRAFT" });
     const ids = hidden.options.map((o) => o.values[0].id);
-    await expect(addCartItem(cartId, { productId: hidden.id, quantity: 100, optionValueIds: ids })).rejects.toThrow(/not available/);
+    await expect(addCartItem(cartId, { productId: hidden.id, quantity: 100, optionValueIds: ids })).rejects.toThrow(/no longer available/);
+    const paused = await createTestProduct({ isAvailable: false });
+    const pausedIds = paused.options.map((o) => o.values[0].id);
+    await expect(addCartItem(cartId, { productId: paused.id, quantity: 100, optionValueIds: pausedIds })).rejects.toThrow(
+      /temporarily unavailable/,
+    );
   });
 });
 
@@ -94,10 +100,42 @@ describe("changing the cart", () => {
   it("flags products that were disabled after being added", async () => {
     const cartId = await createGuestCart("guest-hash");
     await addCartItem(cartId, { productId: product.id, quantity: 100, optionValueIds: [matte, single] });
-    await prisma.product.update({ where: { id: product.id }, data: { isActive: false } });
+    await prisma.product.update({ where: { id: product.id }, data: { status: "ARCHIVED" } });
     const cart = await getCartView(cartId);
     expect(cart.lines[0].problem).toMatch(/no longer available/);
     expect(cart.subtotalMinor).toBe(0);
+  });
+});
+
+describe("changing options", () => {
+  it("reconfigures a line and reprices it", async () => {
+    const cartId = await createGuestCart("guest-hash");
+    await addCartItem(cartId, { productId: product.id, quantity: 100, optionValueIds: [matte, single] });
+    const [line] = (await getCartView(cartId)).lines;
+    await updateCartItemOptions(cartId, line.id, [gloss, double]);
+    const [updated] = (await getCartView(cartId)).lines;
+    expect(updated.selection.map((s) => s.value)).toEqual(["Gloss", "Double"]);
+    expect(updated.unitPriceMinor).toBe(300 + 50 + 100);
+  });
+
+  it("merges into an existing line with the same configuration", async () => {
+    const cartId = await createGuestCart("guest-hash");
+    await addCartItem(cartId, { productId: product.id, quantity: 100, optionValueIds: [matte, single] });
+    await addCartItem(cartId, { productId: product.id, quantity: 200, optionValueIds: [gloss, single] });
+    const [first] = (await getCartView(cartId)).lines;
+    await updateCartItemOptions(cartId, first.id, [gloss, single]);
+    const lines = (await getCartView(cartId)).lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0].quantity).toBe(300);
+  });
+
+  it("rejects invalid options and other carts' items", async () => {
+    const cartId = await createGuestCart("guest-hash");
+    const other = await createGuestCart("other");
+    await addCartItem(cartId, { productId: product.id, quantity: 100, optionValueIds: [matte, single] });
+    const [line] = (await getCartView(cartId)).lines;
+    await expect(updateCartItemOptions(cartId, line.id, [matte])).rejects.toThrow(/choose one Sides/);
+    await expect(updateCartItemOptions(other, line.id, [gloss, single])).rejects.toThrow(/not found/);
   });
 });
 

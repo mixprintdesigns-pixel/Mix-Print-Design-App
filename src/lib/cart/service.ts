@@ -1,6 +1,13 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import { configKey, linePrice, resolveSelection, validateQuantity, type SelectedOption } from "@/lib/pricing";
+import {
+  configKey,
+  linePrice,
+  resolveSelection,
+  validateQuantity,
+  type OptionInput,
+  type SelectedOption,
+} from "@/lib/pricing";
 
 export class CartError extends Error {}
 
@@ -8,17 +15,32 @@ const productForPricing = {
   id: true,
   name: true,
   slug: true,
-  isActive: true,
+  status: true,
+  isAvailable: true,
   basePriceMinor: true,
   minQuantity: true,
   quantityStep: true,
   images: { orderBy: { sortOrder: "asc" as const }, take: 1, select: { url: true, alt: true } },
   priceTiers: { select: { minQuantity: true, unitPriceMinor: true } },
+  bulkDiscounts: { select: { minQuantity: true, percentBps: true } },
   options: {
     orderBy: { sortOrder: "asc" as const },
-    select: { id: true, name: true, values: { select: { id: true, label: true, priceDeltaMinor: true } } },
+    select: {
+      id: true,
+      name: true,
+      values: {
+        orderBy: { sortOrder: "asc" as const },
+        select: { id: true, label: true, priceDeltaMinor: true, pricing: true },
+      },
+    },
   },
 };
+
+function unavailableReason(p: { status: string; isAvailable: boolean }): string | null {
+  if (p.status !== "PUBLISHED") return "This product is no longer available.";
+  if (!p.isAvailable) return "This product is temporarily unavailable.";
+  return null;
+}
 
 export type CartLine = {
   id: string;
@@ -30,8 +52,12 @@ export type CartLine = {
   minQuantity: number;
   quantityStep: number;
   selection: SelectedOption[];
+  /** All options of the product, so the cart can offer to change them. */
+  options: OptionInput[];
   notes: string | null;
   unitPriceMinor: number;
+  flatFeesMinor: number;
+  discountMinor: number;
   lineTotalMinor: number;
   /** Set when the product was disabled or its options changed since it was added. */
   problem: string | null;
@@ -50,12 +76,12 @@ export async function getCartView(cartId: string): Promise<CartView> {
     const p = item.product;
     const resolved = resolveSelection(p.options, item.optionValueIds);
     const selection = resolved.ok ? resolved.selection : [];
-    const { unitPriceMinor, lineTotalMinor } = linePrice(p, selection, item.quantity);
-    const problem = !p.isActive
-      ? "This product is no longer available."
-      : !resolved.ok
+    const price = linePrice(p, selection, item.quantity);
+    const problem =
+      unavailableReason(p) ??
+      (!resolved.ok
         ? "Options for this product have changed. Please remove it and add it again."
-        : validateQuantity(p, item.quantity);
+        : validateQuantity(p, item.quantity));
     return {
       id: item.id,
       productId: p.id,
@@ -66,9 +92,12 @@ export async function getCartView(cartId: string): Promise<CartView> {
       minQuantity: p.minQuantity,
       quantityStep: p.quantityStep,
       selection,
+      options: p.options,
       notes: item.notes,
-      unitPriceMinor,
-      lineTotalMinor,
+      unitPriceMinor: price.unitPriceMinor,
+      flatFeesMinor: price.flatFeesMinor,
+      discountMinor: price.discountMinor,
+      lineTotalMinor: price.lineTotalMinor,
       problem,
     };
   });
@@ -87,7 +116,9 @@ export async function countCartLines(cartId: string): Promise<number> {
 
 async function loadSellableProduct(productId: string) {
   const product = await prisma.product.findUnique({ where: { id: productId }, select: productForPricing });
-  if (!product || !product.isActive) throw new CartError("This product is not available.");
+  if (!product) throw new CartError("This product is not available.");
+  const reason = unavailableReason(product);
+  if (reason) throw new CartError(reason);
   return product;
 }
 
@@ -130,6 +161,37 @@ export async function updateCartItemQuantity(cartId: string, itemId: string, qua
   const quantityError = validateQuantity(product, quantity);
   if (quantityError) throw new CartError(quantityError);
   await prisma.cartItem.update({ where: { id: item.id }, data: { quantity } });
+}
+
+/**
+ * Changes the options of a cart line. If the new configuration already exists in the cart,
+ * the two lines are merged.
+ */
+export async function updateCartItemOptions(cartId: string, itemId: string, optionValueIds: string[]): Promise<void> {
+  const item = await prisma.cartItem.findFirst({ where: { id: itemId, cartId } });
+  if (!item) throw new CartError("Item not found in your cart.");
+  const product = await loadSellableProduct(item.productId);
+  const resolved = resolveSelection(product.options, optionValueIds);
+  if (!resolved.ok) throw new CartError(resolved.error);
+
+  const key = configKey(optionValueIds);
+  if (key === item.configKey) return;
+  const ids = resolved.selection.map((s) => s.valueId);
+
+  await prisma.$transaction(async (tx) => {
+    const twin = await tx.cartItem.findUnique({
+      where: { cartId_productId_configKey: { cartId, productId: item.productId, configKey: key } },
+    });
+    if (twin) {
+      const quantity = twin.quantity + item.quantity;
+      const quantityError = validateQuantity(product, quantity);
+      if (quantityError) throw new CartError(quantityError);
+      await tx.cartItem.update({ where: { id: twin.id }, data: { quantity } });
+      await tx.cartItem.delete({ where: { id: item.id } });
+    } else {
+      await tx.cartItem.update({ where: { id: item.id }, data: { optionValueIds: ids, configKey: key } });
+    }
+  });
 }
 
 export async function removeCartItem(cartId: string, itemId: string): Promise<void> {

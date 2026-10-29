@@ -2,7 +2,13 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { addCartItem, CartError, removeCartItem, updateCartItemQuantity } from "@/lib/cart/service";
+import {
+  addCartItem,
+  CartError,
+  removeCartItem,
+  updateCartItemOptions,
+  updateCartItemQuantity,
+} from "@/lib/cart/service";
 import { ensureCartId } from "@/lib/cart/session";
 import { addToCartSchema } from "@/lib/validation";
 
@@ -34,6 +40,30 @@ export async function updateCartItemAction(_prev: CartActionState, formData: For
   if (!parsed.success) return { error: "Enter a valid quantity." };
   try {
     await updateCartItemQuantity(await ensureCartId(), parsed.data.itemId, parsed.data.quantity);
+  } catch (error) {
+    if (error instanceof CartError) return { error: error.message };
+    throw error;
+  }
+  refresh();
+  return { ok: true };
+}
+
+const optionsSchema = z.object({
+  itemId: z.string().min(1).max(50),
+  optionValueIds: z.array(z.string().min(1).max(50)).max(20),
+});
+
+export async function updateCartItemOptionsAction(
+  _prev: CartActionState,
+  formData: FormData,
+): Promise<CartActionState> {
+  const parsed = optionsSchema.safeParse({
+    itemId: formData.get("itemId"),
+    optionValueIds: formData.getAll("optionValueId").map(String).filter(Boolean),
+  });
+  if (!parsed.success) return { error: "Please choose your options." };
+  try {
+    await updateCartItemOptions(await ensureCartId(), parsed.data.itemId, parsed.data.optionValueIds);
   } catch (error) {
     if (error instanceof CartError) return { error: error.message };
     throw error;

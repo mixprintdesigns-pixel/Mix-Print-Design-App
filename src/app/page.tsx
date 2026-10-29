@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { ProductCard } from "@/components/product-card";
-import { getCategories, getFeaturedProducts } from "@/lib/catalog/queries";
+import { getCategoryTree, getFeaturedProducts } from "@/lib/catalog/queries";
 
 // Catalog data is cached ("use cache"), so this whole page prerenders into the static shell.
 export default async function HomePage() {
-  const [categories, featured] = await Promise.all([getCategories(), getFeaturedProducts()]);
+  const [categories, featured] = await Promise.all([getCategoryTree(), getFeaturedProducts()]);
 
   return (
     <>

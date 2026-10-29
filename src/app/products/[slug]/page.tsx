@@ -6,10 +6,18 @@ import { ProductConfigurator } from "@/components/product-configurator";
 import { ProductGallery } from "@/components/product-gallery";
 import { getProductBySlug } from "@/lib/catalog/queries";
 import { formatPKR } from "@/lib/money";
+import { formatPercent } from "@/lib/pricing";
 
 export async function generateMetadata({ params }: PageProps<"/products/[slug]">): Promise<Metadata> {
   const product = await getProductBySlug((await params).slug);
-  return product ? { title: product.name, description: product.summary ?? undefined } : { title: "Not found" };
+  if (!product) return { title: "Not found" };
+  const description = product.seoDescription ?? product.summary ?? undefined;
+  return {
+    // seoTitle is used as-is; the plain product name gets the site suffix from the layout template.
+    title: product.seoTitle ? { absolute: product.seoTitle } : product.name,
+    description,
+    openGraph: { title: product.seoTitle ?? product.name, description, images: product.images.slice(0, 1).map((i) => i.url) },
+  };
 }
 
 export default function ProductPage({ params }: PageProps<"/products/[slug]">) {
@@ -31,8 +39,16 @@ async function ProductDetail({ params }: { params: PageProps<"/products/[slug]">
       <nav className="mb-6 text-sm text-muted" aria-label="Breadcrumb">
         <Link href="/products" className="hover:text-foreground">
           Products
-        </Link>{" "}
-        /{" "}
+        </Link>
+        {product.category.parent && (
+          <>
+            {" / "}
+            <Link href={`/products?category=${product.category.parent.slug}`} className="hover:text-foreground">
+              {product.category.parent.name}
+            </Link>
+          </>
+        )}
+        {" / "}
         <Link href={`/products?category=${product.category.slug}`} className="hover:text-foreground">
           {product.category.name}
         </Link>
@@ -42,17 +58,26 @@ async function ProductDetail({ params }: { params: PageProps<"/products/[slug]">
         <div>
           <h1 className="text-3xl font-bold">{product.name}</h1>
           {product.summary && <p className="mt-2 text-lg text-muted">{product.summary}</p>}
-          <p className="mt-2 text-sm text-muted">Ready in about {product.turnaroundDays} working days after proof approval.</p>
-          <ProductConfigurator
-            product={{
-              id: product.id,
-              basePriceMinor: product.basePriceMinor,
-              minQuantity: product.minQuantity,
-              quantityStep: product.quantityStep,
-              priceTiers: product.priceTiers,
-              options: product.options,
-            }}
-          />
+          <p className="mt-2 text-sm text-muted">
+            SKU {product.sku} · Ready in about {product.turnaroundDays} working days after proof approval.
+          </p>
+          {product.isAvailable ? (
+            <ProductConfigurator
+              product={{
+                id: product.id,
+                basePriceMinor: product.basePriceMinor,
+                minQuantity: product.minQuantity,
+                quantityStep: product.quantityStep,
+                priceTiers: product.priceTiers,
+                bulkDiscounts: product.bulkDiscounts,
+                options: product.options,
+              }}
+            />
+          ) : (
+            <p className="card mt-6 p-5 font-medium" role="status">
+              This product is temporarily unavailable. Please check back soon or contact us for a quote.
+            </p>
+          )}
         </div>
       </div>
 
@@ -61,20 +86,34 @@ async function ProductDetail({ params }: { params: PageProps<"/products/[slug]">
           <h2 className="text-xl font-bold">About this product</h2>
           <div className="mt-3 whitespace-pre-line leading-relaxed text-muted">{product.description}</div>
         </div>
-        {product.priceTiers.length > 0 && (
-          <div className="card p-5">
+        {(product.priceTiers.length > 0 || product.bulkDiscounts.length > 0) && (
+          <div className="card h-fit p-5">
             <h2 className="font-bold">Volume pricing</h2>
-            <p className="mt-1 text-xs text-muted">Base unit price, before options.</p>
-            <table className="mt-3 w-full text-sm">
-              <tbody>
-                {product.priceTiers.map((t) => (
-                  <tr key={t.minQuantity} className="border-t border-border">
-                    <td className="py-2">{t.minQuantity.toLocaleString()}+ units</td>
-                    <td className="py-2 text-right font-semibold">{formatPKR(t.unitPriceMinor)} each</td>
-                  </tr>
+            {product.priceTiers.length > 0 && (
+              <>
+                <p className="mt-1 text-xs text-muted">Base unit price, before options.</p>
+                <table className="mt-3 w-full text-sm">
+                  <tbody>
+                    {product.priceTiers.map((t) => (
+                      <tr key={t.minQuantity} className="border-t border-border">
+                        <td className="py-2">{t.minQuantity.toLocaleString()}+ units</td>
+                        <td className="py-2 text-right font-semibold">{formatPKR(t.unitPriceMinor)} each</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+            {product.bulkDiscounts.length > 0 && (
+              <ul className="mt-3 space-y-1 text-sm" aria-label="Bulk discounts">
+                {product.bulkDiscounts.map((d) => (
+                  <li key={d.minQuantity} className="rounded-lg bg-accent/10 px-3 py-2">
+                    <span className="font-semibold">{formatPercent(d.percentBps)} off</span> orders of{" "}
+                    {d.minQuantity.toLocaleString()}+ units
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            )}
           </div>
         )}
       </section>

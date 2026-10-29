@@ -7,6 +7,7 @@ An online printing store for the Pakistani market: product catalog with volume p
 | Stage | Scope | Status |
 | --- | --- | --- |
 | 1 | Project structure, full database schema, authentication, product catalog, shopping cart, tests | ✅ Done |
+| 1b | Catalog requirements (spec §4): admin dashboard for products, images and categories; subcategories, sorting, filters, SEO, SKUs, publication status, bulk discounts, per-order fees, affiliate %; change options in cart | ✅ Done |
 | 2 | Checkout, addresses, orders, order tracking, JazzCash / Easypaisa / COD / bank transfer payments | Planned |
 | 3 | Artwork uploads, custom design requests, proof approvals, real-time order chat | Planned |
 | 4 | Admin dashboard (products, orders, proofs), affiliate program, emails / SMS | Planned |
@@ -33,6 +34,8 @@ npx prisma migrate deploy        # create tables
 npm run db:seed                  # demo catalog + local admin user
 npm run dev                      # http://localhost:3000
 ```
+
+The demo seed is **sample data for development and tests only**. Real products and prices are entered by administrators at **/admin/products**.
 
 The seed creates a development-only admin account, `admin@mixprint.local` / `ChangeMe12345`. It is skipped when `NODE_ENV=production`.
 
@@ -91,13 +94,25 @@ scripts/                 Helper scripts (placeholder image generator)
 - **Guest carts:** visitors can shop without an account. On sign-up or sign-in their guest cart is merged into their account cart.
 - **Cache Components:** catalog queries use `"use cache"` with a `catalog` cache tag, so the catalog renders from cache. Anything that reads cookies sits inside `<Suspense>`.
 
+## Admin dashboard
+
+`/admin` is for `ADMIN` and `STAFF` users. Catalog management (products, images, categories) requires `ADMIN`.
+
+- **Products:** SKU, slug, category, short and full description, base price, minimum quantity and step, production time, quantity price tiers, bulk discounts, options (size, material, finishing, other) whose values add a price per unit or once per order, availability, featured flag, SEO title and description, affiliate commission %, and publication status (draft, published, archived). A product needs at least one image to be published. Products that have been ordered are archived instead of deleted.
+- **Images:** upload several at once (JPG, PNG or WebP, up to 4 MB each, checked by file content), set the main image, reorder, edit descriptions, delete.
+- **Categories:** unlimited nesting (categories and subcategories), with loop prevention.
+
+**First administrator on a new deployment:** set `ADMIN_EMAILS` to your email, then register with that email. It only works while there is no administrator yet, because emails are not verified at this stage. After that, remove the variable.
+
 ## Deploying to Vercel
 
 The app needs a PostgreSQL database at build time as well as at runtime. The catalog pages are prerendered from the database.
 
 1. In Vercel → your project → **Storage**, create or connect a Postgres database (for example **Neon**, free plan). Connect it to Production and Preview.
 2. Check **Settings → Environment Variables**. The app reads the first of these that is set: `DATABASE_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL`.
-3. Optional: add `SEED_DEMO_DATA` = `true` to load the demo catalog. Remove it after the first successful deploy, or later deploys will reset seeded products to the demo data.
-4. Deploy **from the latest commit**. Pushing to `main` does this, or use Deployments → Create Deployment → `main`. Redeploying an older deployment rebuilds that older code.
+3. **Images:** in **Storage**, create a **Blob** store and connect it to the project. This sets `BLOB_READ_WRITE_TOKEN`; without it, image uploads fail on Vercel because its filesystem is read-only.
+4. **First admin:** add `ADMIN_EMAILS` = your email, deploy, register with that email, then remove the variable.
+5. Optional: add `SEED_DEMO_DATA` = `true` to load the demo catalog. Remove it after the first successful deploy, or later deploys will reset seeded products to the demo data.
+6. Deploy **from the latest commit**. Pushing to `main` does this, or use Deployments → Create Deployment → `main`. Redeploying an older deployment rebuilds that older code.
 
 `npm run build` runs `scripts/build.sh`. On Vercel (`VERCEL=1`) it applies migrations (`prisma migrate deploy`), optionally seeds, then runs `next build`. Locally it only runs `next build`. The development admin account is never created in production builds.

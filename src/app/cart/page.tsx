@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
+import { CartOptionsForm } from "@/components/cart-options-form";
 import { CartQuantityForm } from "@/components/cart-quantity-form";
 import { removeCartItemAction } from "@/app/actions/cart";
 import { getCurrentCart } from "@/lib/cart/session";
@@ -63,12 +64,21 @@ async function CartContents() {
                     {line.selection.map((s) => `${s.option}: ${s.value}`).join(" · ")}
                   </p>
                   {line.notes && <p className="mt-1 text-sm italic text-muted">“{line.notes}”</p>}
+                  {line.discountMinor > 0 && (
+                    <p className="text-sm text-green-700 dark:text-green-400">
+                      Bulk discount −{formatPKR(line.discountMinor)}
+                    </p>
+                  )}
+                  {line.flatFeesMinor > 0 && (
+                    <p className="text-sm text-muted">Includes {formatPKR(line.flatFeesMinor)} one-time setup</p>
+                  )}
                 </div>
                 <p className="text-right font-bold" data-testid="line-total">
                   {formatPKR(line.lineTotalMinor)}
                   <span className="block text-xs font-normal text-muted">{formatPKR(line.unitPriceMinor)} each</span>
                 </p>
               </div>
+              <CartOptionsForm itemId={line.id} options={line.options} selection={line.selection} />
               {line.problem && (
                 <p className="field-error" role="alert">
                   {line.problem}

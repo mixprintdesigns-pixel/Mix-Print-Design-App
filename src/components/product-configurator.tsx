@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { addToCartAction, type CartActionState } from "@/app/actions/cart";
 import { formatPKR } from "@/lib/money";
-import { linePrice, resolveSelection, validateQuantity, type ProductPricingInput } from "@/lib/pricing";
+import {
+  formatPercent,
+  linePrice,
+  resolveSelection,
+  validateQuantity,
+  type LinePrice,
+  type ProductPricingInput,
+} from "@/lib/pricing";
 
 type Props = { product: ProductPricingInput & { id: string } };
 
@@ -16,7 +23,7 @@ export function ProductConfigurator({ product }: Props) {
   const [state, formAction, pending] = useActionState<CartActionState, FormData>(addToCartAction, {});
 
   // Same pricing code as the server; the server recalculates and is the source of truth.
-  const quote = useMemo((): { error: string } | { error: null; unitPriceMinor: number; lineTotalMinor: number } => {
+  const quote = useMemo((): { error: string } | (LinePrice & { error: null }) => {
     const resolved = resolveSelection(product.options, Object.values(selected));
     if (!resolved.ok) return { error: resolved.error };
     const quantityError = validateQuantity(product, quantity);
@@ -51,7 +58,10 @@ export function ProductConfigurator({ product }: Props) {
                   />
                   {value.label}
                   {value.priceDeltaMinor > 0 && (
-                    <span className="ml-1 text-xs text-muted">+{formatPKR(value.priceDeltaMinor)}/unit</span>
+                    <span className="ml-1 text-xs text-muted">
+                      +{formatPKR(value.priceDeltaMinor)}
+                      {value.pricing === "PER_ORDER" ? " once" : "/unit"}
+                    </span>
                   )}
                 </label>
               );
@@ -97,6 +107,14 @@ export function ProductConfigurator({ product }: Props) {
         ) : (
           <div>
             <p className="text-sm text-muted">{formatPKR(quote.unitPriceMinor)} per unit</p>
+            {quote.discountMinor > 0 && (
+              <p className="text-sm text-green-700 dark:text-green-400">
+                Bulk discount {formatPercent(quote.discountBps)}: −{formatPKR(quote.discountMinor)}
+              </p>
+            )}
+            {quote.flatFeesMinor > 0 && (
+              <p className="text-sm text-muted">Includes {formatPKR(quote.flatFeesMinor)} one-time setup</p>
+            )}
             <p className="text-2xl font-bold" data-testid="live-total">
               {formatPKR(quote.lineTotalMinor)}
             </p>

@@ -11,6 +11,11 @@ export function ProductCard({ product }: { product: ProductCardData }) {
       className="card group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lg"
     >
       <div className="relative aspect-[4/3] bg-background">
+        {!product.isAvailable && (
+          <span className="absolute left-3 top-3 z-10 rounded-full bg-foreground px-2.5 py-1 text-xs font-semibold text-background">
+            Currently unavailable
+          </span>
+        )}
         {image && (
           <Image
             src={image.url}
@@ -28,7 +33,10 @@ export function ProductCard({ product }: { product: ProductCardData }) {
         {product.summary && <p className="mt-1 line-clamp-2 text-sm text-muted">{product.summary}</p>}
         <p className="mt-auto pt-3 text-sm">
           From <span className="font-bold">{formatPKR(startingUnitPrice(product))}</span>
-          <span className="text-muted"> / unit · min {product.minQuantity}</span>
+          <span className="text-muted">
+            {" "}
+            / unit · min {product.minQuantity} · {product.turnaroundDays}-day production
+          </span>
         </p>
       </div>
     </Link>

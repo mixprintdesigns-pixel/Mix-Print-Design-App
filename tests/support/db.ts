@@ -10,20 +10,24 @@ export async function resetDatabase() {
 }
 
 /** A configurable product: base PKR 3.00/unit, min 100 in steps of 100, tier at 500. */
-export async function createTestProduct(overrides: { isActive?: boolean; slug?: string } = {}) {
+export async function createTestProduct(
+  overrides: { isAvailable?: boolean; status?: "DRAFT" | "PUBLISHED" | "ARCHIVED"; slug?: string } = {},
+) {
   const category = await prisma.category.create({
     data: { name: "Cards", slug: `cards-${Math.random().toString(36).slice(2, 8)}` },
   });
   return prisma.product.create({
     data: {
       name: "Test Cards",
+      sku: `TEST-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
       slug: overrides.slug ?? `test-cards-${Math.random().toString(36).slice(2, 8)}`,
       description: "Test",
       categoryId: category.id,
       basePriceMinor: 300,
       minQuantity: 100,
       quantityStep: 100,
-      isActive: overrides.isActive ?? true,
+      status: overrides.status ?? "PUBLISHED",
+      isAvailable: overrides.isAvailable ?? true,
       priceTiers: { create: [{ minQuantity: 500, unitPriceMinor: 250 }] },
       options: {
         create: [

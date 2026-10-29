@@ -1,6 +1,12 @@
-// Demo catalog. Prices are in paisa (PKR × 100).
+// DEMO catalog for development, tests and previews only. These are NOT real MixPrint products
+// or prices: the real catalog is configured by administrators in /admin/products.
+// Prices are in paisa (PKR × 100).
 
-export type SeedOption = { name: string; values: [label: string, priceDeltaMinor: number][] };
+export type SeedOption = {
+  name: string;
+  kind: "SIZE" | "MATERIAL" | "FINISHING" | "OTHER";
+  values: [label: string, priceDeltaMinor: number, pricing?: "PER_UNIT" | "PER_ORDER"][];
+};
 export type SeedProduct = {
   slug: string;
   name: string;
@@ -13,6 +19,7 @@ export type SeedProduct = {
   turnaroundDays: number;
   isFeatured?: boolean;
   tiers?: [minQuantity: number, unitPriceMinor: number][];
+  bulkDiscounts?: [minQuantity: number, percentBps: number][];
   options: SeedOption[];
   imageViews: string[]; // one image is generated per view
 };
@@ -26,7 +33,7 @@ export const categories = [
   { slug: "stationery", name: "Office Stationery", description: "Letterheads, envelopes and more.", sortOrder: 6 },
 ];
 
-const sides: SeedOption = { name: "Printed sides", values: [["Front only", 0], ["Front & back", 100]] };
+const sides: SeedOption = { name: "Printed sides", kind: "OTHER", values: [["Front only", 0], ["Front & back", 100]] };
 
 export const products: SeedProduct[] = [
   {
@@ -43,9 +50,9 @@ export const products: SeedProduct[] = [
     isFeatured: true,
     tiers: [[500, 250], [1000, 200], [2000, 160]],
     options: [
-      { name: "Paper", values: [["350gsm Matte", 0], ["400gsm Gloss", 50], ["Textured Linen", 150]] },
+      { name: "Paper", kind: "MATERIAL", values: [["350gsm Matte", 0], ["400gsm Gloss", 50], ["Textured Linen", 150]] },
       sides,
-      { name: "Finish", values: [["None", 0], ["Rounded corners", 50], ["Spot UV", 200]] },
+      { name: "Finish", kind: "FINISHING", values: [["None", 0], ["Rounded corners", 50], ["Spot UV", 200]] },
     ],
     imageViews: ["Front", "Back", "Stack", "Paper samples"],
   },
@@ -62,7 +69,7 @@ export const products: SeedProduct[] = [
     isFeatured: true,
     tiers: [[500, 1000], [1000, 850]],
     options: [
-      { name: "Foil", values: [["No foil", 0], ["Gold foil", 400], ["Silver foil", 400]] },
+      { name: "Foil", kind: "FINISHING", values: [["No foil", 0], ["Gold foil", 400], ["Silver foil", 400]] },
       sides,
     ],
     imageViews: ["Front", "Foil detail", "Box of cards"],
@@ -79,9 +86,10 @@ export const products: SeedProduct[] = [
     turnaroundDays: 2,
     isFeatured: true,
     tiers: [[500, 900], [1000, 650], [5000, 450]],
+    bulkDiscounts: [[10000, 500]],
     options: [
-      { name: "Paper", values: [["130gsm Gloss", 0], ["170gsm Gloss", 300], ["170gsm Matte", 300]] },
-      { name: "Printed sides", values: [["Front only", 0], ["Front & back", 400]] },
+      { name: "Paper", kind: "MATERIAL", values: [["130gsm Gloss", 0], ["170gsm Gloss", 300], ["170gsm Matte", 300]] },
+      { name: "Printed sides", kind: "OTHER", values: [["Front only", 0], ["Front & back", 400]] },
     ],
     imageViews: ["Front", "Back", "Fanned stack"],
   },
@@ -96,7 +104,7 @@ export const products: SeedProduct[] = [
     quantityStep: 50,
     turnaroundDays: 4,
     tiers: [[250, 3500], [1000, 2500]],
-    options: [{ name: "Paper", values: [["150gsm Gloss", 0], ["200gsm Matte", 800]] }],
+    options: [{ name: "Paper", kind: "MATERIAL", values: [["150gsm Gloss", 0], ["200gsm Matte", 800]] }],
     imageViews: ["Folded", "Open spread"],
   },
   {
@@ -111,8 +119,8 @@ export const products: SeedProduct[] = [
     turnaroundDays: 2,
     isFeatured: true,
     options: [
-      { name: "Size", values: [["3 × 6 ft", 0], ["4 × 8 ft", 250000], ["6 × 10 ft", 650000]] },
-      { name: "Finishing", values: [["Hemmed with eyelets", 0], ["Pole pockets", 30000]] },
+      { name: "Size", kind: "SIZE", values: [["3 × 6 ft", 0], ["4 × 8 ft", 250000], ["6 × 10 ft", 650000]] },
+      { name: "Finishing", kind: "FINISHING", values: [["Hemmed with eyelets", 0], ["Pole pockets", 30000]] },
     ],
     imageViews: ["Shop front", "Eyelet detail", "Event stage"],
   },
@@ -126,7 +134,7 @@ export const products: SeedProduct[] = [
     minQuantity: 1,
     quantityStep: 1,
     turnaroundDays: 3,
-    options: [{ name: "Stand", values: [["Economy", 0], ["Premium wide base", 350000]] }],
+    options: [{ name: "Stand", kind: "OTHER", values: [["Economy", 0], ["Premium wide base", 350000]] }],
     imageViews: ["Standing", "Base & bag"],
   },
   {
@@ -142,8 +150,9 @@ export const products: SeedProduct[] = [
     isFeatured: true,
     tiers: [[250, 1500], [1000, 900]],
     options: [
-      { name: "Size", values: [["2 inch", 0], ["3 inch", 800], ["4 inch", 1500]] },
-      { name: "Material", values: [["Gloss paper", 0], ["Waterproof vinyl", 700], ["Transparent", 1000]] },
+      { name: "Size", kind: "SIZE", values: [["2 inch", 0], ["3 inch", 800], ["4 inch", 1500]] },
+      { name: "Material", kind: "MATERIAL", values: [["Gloss paper", 0], ["Waterproof vinyl", 700], ["Transparent", 1000]] },
+      { name: "Cutting", kind: "FINISHING", values: [["Standard shapes", 0], ["Custom die (one-time setup)", 150000, "PER_ORDER"]] },
     ],
     imageViews: ["Sheet", "On laptop", "Shapes"],
   },
@@ -159,9 +168,10 @@ export const products: SeedProduct[] = [
     turnaroundDays: 7,
     isFeatured: true,
     tiers: [[500, 14000], [1000, 11000]],
+    bulkDiscounts: [[2000, 500], [5000, 1000]],
     options: [
-      { name: "Size", values: [["Small (8×6×2 in)", 0], ["Medium (10×8×4 in)", 3000], ["Large (14×10×4 in)", 6000]] },
-      { name: "Print", values: [["Outside only", 0], ["Inside & outside", 4000]] },
+      { name: "Size", kind: "SIZE", values: [["Small (8×6×2 in)", 0], ["Medium (10×8×4 in)", 3000], ["Large (14×10×4 in)", 6000]] },
+      { name: "Print", kind: "OTHER", values: [["Outside only", 0], ["Inside & outside", 4000]] },
     ],
     imageViews: ["Closed", "Open", "Stacked"],
   },
@@ -176,7 +186,7 @@ export const products: SeedProduct[] = [
     quantityStep: 100,
     turnaroundDays: 3,
     tiers: [[500, 900], [1000, 700]],
-    options: [{ name: "Paper", values: [["100gsm Bond", 0], ["120gsm Premium", 300]] }],
+    options: [{ name: "Paper", kind: "MATERIAL", values: [["100gsm Bond", 0], ["120gsm Premium", 300]] }],
     imageViews: ["Front", "On desk"],
   },
   {
@@ -190,7 +200,7 @@ export const products: SeedProduct[] = [
     quantityStep: 100,
     turnaroundDays: 4,
     tiers: [[500, 1600], [1000, 1300]],
-    options: [{ name: "Size", values: [["DL (110×220 mm)", 0], ["A4 (229×324 mm)", 1500]] }],
+    options: [{ name: "Size", kind: "SIZE", values: [["DL (110×220 mm)", 0], ["A4 (229×324 mm)", 1500]] }],
     imageViews: ["Front", "Back flap"],
   },
 ];

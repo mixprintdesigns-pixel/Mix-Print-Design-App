@@ -91,41 +91,55 @@ model Category {
   products    Product[]
 }
 
+enum ProductStatus {
+  DRAFT // being set up, hidden from customers
+  PUBLISHED // visible in the store
+  ARCHIVED // retired, hidden, kept for order history
+}
+
 model Product {
-  id                  String   @id @default(cuid())
-  name                String
-  slug                String   @unique
-  summary             String?
-  description         String
-  categoryId          String
-  category            Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  basePriceMinor      Int // per-unit price when no quantity tier applies
-  minQuantity         Int      @default(1)
-  quantityStep        Int      @default(1)
-  turnaroundDays      Int      @default(3)
-  isActive            Boolean  @default(true)
-  isFeatured          Boolean  @default(false)
-  allowsDesignService Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                     String        @id @default(cuid())
+  sku                    String        @unique // unique product identifier, e.g. BC-STD-001
+  name                   String
+  slug                   String        @unique
+  summary                String? // short description
+  description            String // full description
+  categoryId             String
+  category               Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  basePriceMinor         Int // per-unit price when no quantity tier applies
+  minQuantity            Int           @default(1)
+  quantityStep           Int           @default(1)
+  turnaroundDays         Int           @default(3) // estimated production time, working days
+  status                 ProductStatus @default(DRAFT)
+  isAvailable            Boolean       @default(true) // can be ordered right now
+  isFeatured             Boolean       @default(false)
+  allowsDesignService    Boolean       @default(true)
+  seoTitle               String?
+  seoDescription         String?
+  affiliateCommissionBps Int? // overrides the affiliate program default; 1000 = 10%
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 
   images         ProductImage[]
   options        ProductOption[]
   priceTiers     PriceTier[]
+  bulkDiscounts  BulkDiscount[]
   cartItems      CartItem[]
   orderItems     OrderItem[]
   designRequests DesignRequest[]
 
-  @@index([categoryId, isActive])
+  @@index([categoryId, status])
+  @@index([status, isFeatured])
 }
 
 model ProductImage {
-  id        String  @id @default(cuid())
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  url       String
-  alt       String
-  sortOrder Int     @default(0) // lowest sortOrder is the primary image
+  id         String  @id @default(cuid())
+  productId  String
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url        String
+  storageKey String? // set for uploaded files so they can be deleted from storage
+  alt        String
+  sortOrder  Int     @default(0) // lowest sortOrder is the main image
 
   @@index([productId, sortOrder])
 }
@@ -141,12 +155,36 @@ model PriceTier {
   @@unique([productId, minQuantity])
 }
 
+// Bulk discount: the highest tier whose minQuantity <= quantity takes percentBps off the line.
+model BulkDiscount {
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  minQuantity Int
+  percentBps  Int // 500 = 5% off
+
+  @@unique([productId, minQuantity])
+}
+
+enum OptionKind {
+  SIZE
+  MATERIAL
+  FINISHING
+  OTHER
+}
+
+enum OptionPricing {
+  PER_UNIT // priceDeltaMinor is added to every unit
+  PER_ORDER // priceDeltaMinor is charged once per cart line (setup fees, plates, die cutting)
+}
+
 // Configurable attributes such as Size, Paper Stock, Finish, Sides.
 model ProductOption {
   id        String               @id @default(cuid())
   productId String
   product   Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
   name      String
+  kind      OptionKind           @default(OTHER)
   sortOrder Int                  @default(0)
   values    ProductOptionValue[]
 
@@ -158,7 +196,8 @@ model ProductOptionValue {
   optionId        String
   option          ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
   label           String
-  priceDeltaMinor Int           @default(0) // added to the unit price
+  priceDeltaMinor Int           @default(0)
+  pricing         OptionPricing @default(PER_UNIT)
   sortOrder       Int           @default(0)
 
   @@unique([optionId, label])

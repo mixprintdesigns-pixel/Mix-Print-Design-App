@@ -20,6 +20,16 @@ export async function requireUser(returnTo?: string): Promise<SessionUser> {
   return user;
 }
 
+export type StaffRole = "STAFF" | "ADMIN";
+
+/** For admin pages and actions. Customers and visitors are redirected or rejected. */
+export async function requireStaff(roles: StaffRole[] = ["STAFF", "ADMIN"]): Promise<SessionUser> {
+  const user = await getCurrentUser();
+  if (!user) redirect(`/login?next=${encodeURIComponent("/admin")}`);
+  if (!(roles as string[]).includes(user.role)) redirect("/");
+  return user;
+}
+
 /** Server Actions only: starts a session and sets the httpOnly cookie. */
 export async function startSession(userId: string): Promise<void> {
   const h = await headers();

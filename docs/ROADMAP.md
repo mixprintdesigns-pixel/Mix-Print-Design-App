@@ -9,6 +9,15 @@
 - Cart: guest carts, merge on sign-in, add, update quantity, remove, server-side repricing
 - 47 unit/integration tests and 12 end-to-end tests (desktop + mobile)
 
+## Stage 1b: Catalog management ✅
+
+- Admin dashboard with role checks; products, images (upload, main image, reorder, delete) and categories with subcategories
+- Product SKUs, publication status, availability, SEO fields, per-product affiliate commission
+- Pricing rules: quantity tiers, bulk discounts, option surcharges per unit or once per order
+- Storefront: category tree, subcategory chips, sorting, production-time and availability filters, SKU search
+- Cart: change a line's options (merges with an identical line)
+- Image storage on local disk (development) or Vercel Blob (production)
+
 ## Stage 2: Checkout, orders and payments
 
 - Address book (Pakistani provinces and cities), delivery charges by city

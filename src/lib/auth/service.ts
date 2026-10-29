@@ -17,11 +17,28 @@ export type SessionUser = {
 
 export class EmailTakenError extends Error {}
 
+/**
+ * Emails in ADMIN_EMAILS (comma separated) become administrators when they register, but only
+ * while the store has no administrator yet. Emails are not verified at this stage, so this is a
+ * one-time bootstrap for the owner's first account, not an ongoing way to grant access.
+ */
+export function isBootstrapAdmin(email: string, env = process.env.ADMIN_EMAILS): boolean {
+  return (env ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(email.toLowerCase());
+}
+
 export async function registerUser(input: RegisterInput): Promise<SessionUser> {
   const passwordHash = await hashPassword(input.password);
+  const role =
+    isBootstrapAdmin(input.email) && (await prisma.user.count({ where: { role: "ADMIN" } })) === 0
+      ? "ADMIN"
+      : "CUSTOMER";
   try {
     return await prisma.user.create({
-      data: { name: input.name, email: input.email, phone: input.phone, passwordHash },
+      data: { name: input.name, email: input.email, phone: input.phone, passwordHash, role },
       select: { id: true, name: true, email: true, role: true },
     });
   } catch (error) {

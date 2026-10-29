@@ -15,6 +15,8 @@ async function main() {
   for (const p of products) {
     const category = await prisma.category.findUniqueOrThrow({ where: { slug: p.category } });
     const data = {
+      sku: p.slug.toUpperCase(),
+      status: "PUBLISHED" as const,
       name: p.name,
       summary: p.summary,
       description: p.description,
@@ -31,6 +33,7 @@ async function main() {
     await prisma.$transaction([
       prisma.productImage.deleteMany({ where: { productId: product.id } }),
       prisma.priceTier.deleteMany({ where: { productId: product.id } }),
+      prisma.bulkDiscount.deleteMany({ where: { productId: product.id } }),
       prisma.productOption.deleteMany({ where: { productId: product.id } }),
       prisma.productImage.createMany({
         data: p.imageViews.map((view, i) => ({
@@ -43,13 +46,24 @@ async function main() {
       prisma.priceTier.createMany({
         data: (p.tiers ?? []).map(([minQuantity, unitPriceMinor]) => ({ productId: product.id, minQuantity, unitPriceMinor })),
       }),
+      prisma.bulkDiscount.createMany({
+        data: (p.bulkDiscounts ?? []).map(([minQuantity, percentBps]) => ({ productId: product.id, minQuantity, percentBps })),
+      }),
       ...p.options.map((o, i) =>
         prisma.productOption.create({
           data: {
             productId: product.id,
             name: o.name,
+            kind: o.kind,
             sortOrder: i,
-            values: { create: o.values.map(([label, priceDeltaMinor], j) => ({ label, priceDeltaMinor, sortOrder: j })) },
+            values: {
+              create: o.values.map(([label, priceDeltaMinor, pricing], j) => ({
+                label,
+                priceDeltaMinor,
+                pricing: pricing ?? "PER_UNIT",
+                sortOrder: j,
+              })),
+            },
           },
         }),
       ),

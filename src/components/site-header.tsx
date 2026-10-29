@@ -39,6 +39,11 @@ async function HeaderSession() {
     <>
       {user ? (
         <>
+          {(user.role === "ADMIN" || user.role === "STAFF") && (
+            <Link href="/admin" className="font-medium text-accent hover:text-brand">
+              Admin
+            </Link>
+          )}
           <Link href="/account" className="hidden font-medium hover:text-brand sm:inline">
             Hi, {user.name.split(" ")[0]}
           </Link>
