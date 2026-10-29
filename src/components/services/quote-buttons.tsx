@@ -7,7 +7,7 @@ export function QuoteButtons({ subject, compact = false }: { subject: string; co
   return (
     <div className="flex flex-wrap gap-2">
       <Link href={quoteLink(subject)} className={`btn-primary ${size}`}>
-        Get Quote
+        Get Quote<span className="sr-only"> for {subject}</span>
       </Link>
       <a
         href={whatsappLink(`Assalam o Alaikum! I'd like a quote for ${subject}.`)}
@@ -15,7 +15,7 @@ export function QuoteButtons({ subject, compact = false }: { subject: string; co
         rel="noopener noreferrer"
         className={`btn border border-green-600 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950 ${size}`}
       >
-        WhatsApp
+        WhatsApp<span className="sr-only"> about {subject}</span>
       </a>
     </div>
   );

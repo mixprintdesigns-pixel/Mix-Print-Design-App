@@ -64,3 +64,64 @@ test.describe("home page", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
+
+test.describe("services", () => {
+  test("services page shows the initial categories and Board Maker sub-types", async ({ page }) => {
+    await page.goto("/services");
+    for (const title of ["Board Maker", "Offset Printing", "Digital Printing"]) {
+      await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
+    }
+    await page.getByRole("link", { name: "View Board Maker →" }).click();
+    await expect(page).toHaveURL(/\/services\/board-maker$/);
+    await expect(page.getByTestId("service-subtype")).toHaveCount(3);
+    const backlit = page.locator("#backlit");
+    await expect(backlit.getByRole("link", { name: "Get Quote for Board Maker / Backlit", exact: true })).toHaveAttribute(
+      "href",
+      "/contact?subject=Quote%3A%20Board%20Maker%20%2F%20Backlit",
+    );
+    await expect(backlit.getByRole("link", { name: "WhatsApp about Board Maker / Backlit", exact: true })).toHaveAttribute(
+      "href",
+      /^https:\/\/wa\.me\/923034889255\?text=.*Backlit/,
+    );
+  });
+
+  test("admin adds a quality and links a product; it appears on the services page automatically", async ({ page, browser, isMobile }) => {
+    test.skip(isMobile, "Admin workflow runs on desktop");
+    const run = Date.now().toString(36);
+    const qualityTitle = `Ultra ${run}`;
+    const admin = await adminPage(browser);
+    await admin.goto("/admin/services");
+
+    const backlit = admin.getByTestId("admin-subtype").filter({ has: admin.getByRole("heading", { name: "Backlit", exact: true }) });
+    await backlit.getByText("+ Add quality to Backlit").click();
+    const addForm = backlit.locator("form").filter({ has: admin.getByRole("button", { name: "Add quality" }) });
+    await addForm.getByLabel("Title").fill(qualityTitle);
+    await addForm.getByLabel("Short description").fill("Our brightest backlit quality.");
+    await addForm.getByRole("button", { name: "Add quality" }).click();
+    const quality = admin.getByTestId("admin-quality").filter({ hasText: qualityTitle });
+    await expect(quality).toBeVisible();
+
+    await quality.getByLabel(`Link a product to ${qualityTitle}`).selectOption({ label: "Vinyl Flex Banner (moves it here)" });
+    await quality.getByRole("button", { name: "Link", exact: true }).click();
+    await expect(quality.getByTestId("linked-product")).toContainText("Vinyl Flex Banner");
+
+    await page.goto("/services/board-maker#backlit");
+    const card = page.getByTestId("service-quality").filter({ hasText: qualityTitle });
+    await expect(card).toBeVisible();
+    await expect(page.getByRole("list", { name: `${qualityTitle} products` }).getByRole("link", { name: /Vinyl Flex Banner/ })).toBeVisible();
+
+    // Hide the quality: it disappears from the website
+    await quality.getByText("Edit quality").click();
+    await quality.getByLabel("Visible on the website").uncheck();
+    await quality.getByRole("button", { name: "Save" }).click();
+    await expect(quality).toContainText("hidden");
+    await page.reload();
+    await expect(page.getByTestId("service-quality").filter({ hasText: qualityTitle })).toHaveCount(0);
+
+    // Put the product back under Digital Printing for other tests
+    const digital = admin.getByTestId("admin-service").filter({ has: admin.getByRole("heading", { name: "Digital Printing" }) });
+    await digital.getByLabel("Link a product to Digital Printing").first().selectOption({ label: "Vinyl Flex Banner (moves it here)" });
+    await digital.getByRole("button", { name: "Link", exact: true }).first().click();
+    await expect(digital.getByTestId("linked-product").filter({ hasText: "Vinyl Flex Banner" }).first()).toBeVisible();
+  });
+});
