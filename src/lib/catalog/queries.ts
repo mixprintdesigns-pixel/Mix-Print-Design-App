@@ -2,8 +2,10 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
+import { buildTree, descendantIds, findById, findByPath, flatten, productUrl, type CategoryNode, type CategoryRow } from "./tree";
 
 export const CATALOG_TAG = "catalog";
+export type { CategoryNode };
 
 /** Only published products are ever shown to customers. */
 const visible = { status: "PUBLISHED" } as const satisfies Prisma.ProductWhereInput;
@@ -19,84 +21,80 @@ const cardSelect = {
   isAvailable: true,
   isFeatured: true,
   createdAt: true,
+  categoryId: true,
   category: { select: { name: true, slug: true } },
   images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true, alt: true } },
   priceTiers: { select: { minQuantity: true, unitPriceMinor: true } },
 } satisfies Prisma.ProductSelect;
 
-export type ProductCard = Prisma.ProductGetPayload<{ select: typeof cardSelect }>;
+/** A product as shown on cards, with its canonical URL (/products/<category path>/<product slug>). */
+export type ProductCard = Prisma.ProductGetPayload<{ select: typeof cardSelect }> & { href: string };
 
 /** Lowest unit price a customer can reach before options, for "from PKR x" labels. */
 export function startingUnitPrice(p: Pick<ProductCard, "basePriceMinor" | "priceTiers">): number {
   return Math.min(p.basePriceMinor, ...p.priceTiers.map((t) => t.unitPriceMinor));
 }
 
-export type CategoryNode = {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  parentId: string | null;
-  productCount: number; // published products in this category and its subcategories
-  children: CategoryNode[];
-};
-
-/** Full category tree with published product counts. */
-export async function getCategoryTree(): Promise<CategoryNode[]> {
-  "use cache";
-  cacheTag(CATALOG_TAG);
-  cacheLife("hours");
+async function loadRows(): Promise<CategoryRow[]> {
   const rows = await prisma.category.findMany({
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
       id: true,
       name: true,
       slug: true,
       description: true,
+      content: true,
+      imageUrl: true,
+      imageAlt: true,
+      sortOrder: true,
+      isVisible: true,
+      priceFromMinor: true,
+      priceUnit: true,
+      seoTitle: true,
+      seoDescription: true,
       parentId: true,
       _count: { select: { products: { where: visible } } },
     },
   });
-  const nodes = new Map<string, CategoryNode>(
-    rows.map(({ _count, ...r }) => [r.id, { ...r, productCount: _count.products, children: [] }]),
-  );
-  const roots: CategoryNode[] = [];
-  for (const node of nodes.values()) {
-    const parent = node.parentId ? nodes.get(node.parentId) : undefined;
-    if (parent) parent.children.push(node);
-    else roots.push(node);
-  }
-  const total = (n: CategoryNode): number => (n.productCount += n.children.reduce((s, c) => s + total(c), 0));
-  roots.forEach(total);
-  return roots;
+  return rows.map(({ _count, ...r }) => ({ ...r, directProductCount: _count.products }));
 }
 
-export function flattenCategories(tree: CategoryNode[], depth = 0): (CategoryNode & { depth: number })[] {
-  return tree.flatMap((n) => [{ ...n, depth }, ...flattenCategories(n.children, depth + 1)]);
+/** Uncached read of the visible tree, for code that runs outside page rendering (e.g. the AI assistant's index). */
+export async function readCategoryTree(): Promise<CategoryNode[]> {
+  return buildTree(await loadRows());
 }
 
-function findCategory(tree: CategoryNode[], slug: string): CategoryNode | undefined {
-  for (const node of tree) {
-    if (node.slug === slug) return node;
-    const found = findCategory(node.children, slug);
-    if (found) return found;
-  }
+/** The visible category tree (main services at the top), shared by the Services and Products pages. */
+export async function getCategoryTree(): Promise<CategoryNode[]> {
+  "use cache";
+  cacheTag(CATALOG_TAG);
+  cacheLife("hours");
+  return readCategoryTree();
 }
 
-function descendantIds(node: CategoryNode): string[] {
-  return [node.id, ...node.children.flatMap(descendantIds)];
+function withHrefs<T extends { slug: string; categoryId: string }>(products: T[], tree: CategoryNode[]): (T & { href: string })[] {
+  return products.map((p) => {
+    const category = findById(tree, p.categoryId);
+    return { ...p, href: category ? productUrl(category.path, p.slug) : `/products/${p.slug}` };
+  });
+}
+
+/** Only products whose category is visible appear on the website. */
+function inVisibleCategories(tree: CategoryNode[]) {
+  return { categoryId: { in: flatten(tree).map((c) => c.id) } } satisfies Prisma.ProductWhereInput;
 }
 
 export async function getFeaturedProducts(): Promise<ProductCard[]> {
   "use cache";
   cacheTag(CATALOG_TAG);
   cacheLife("hours");
-  return prisma.product.findMany({
-    where: { ...visible, isFeatured: true },
+  const tree = await getCategoryTree();
+  const products = await prisma.product.findMany({
+    where: { ...visible, ...inVisibleCategories(tree), isFeatured: true },
     orderBy: { createdAt: "asc" },
     take: 8,
     select: cardSelect,
   });
+  return withHrefs(products, tree);
 }
 
 export const SORTS = {
@@ -110,7 +108,8 @@ export const SORTS = {
 export type SortKey = keyof typeof SORTS;
 
 export type ProductFilter = {
-  category?: string;
+  /** Category id; products in all its sub-categories are included. */
+  categoryId?: string;
   q?: string;
   sort?: SortKey;
   /** Only products ready within this many working days. */
@@ -118,12 +117,11 @@ export type ProductFilter = {
   inStock?: boolean;
 };
 
-export function parseProductFilter(params: Record<string, string | string[] | undefined>): ProductFilter {
+export function parseProductFilter(params: Record<string, string | string[] | undefined>): Omit<ProductFilter, "categoryId"> {
   const str = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
   const sort = str("sort");
   const maxDays = Number(str("maxDays"));
   return {
-    category: str("category"),
     q: str("q")?.trim().slice(0, 100) || undefined,
     sort: sort && sort in SORTS ? (sort as SortKey) : "featured",
     maxDays: Number.isInteger(maxDays) && maxDays > 0 && maxDays <= 60 ? maxDays : undefined,
@@ -136,9 +134,10 @@ export async function listProducts(filter: ProductFilter): Promise<ProductCard[]
   cacheTag(CATALOG_TAG);
   cacheLife("hours");
 
-  let categoryIds: string[] | undefined;
-  if (filter.category) {
-    const node = findCategory(await getCategoryTree(), filter.category);
+  const tree = await getCategoryTree();
+  let categoryIds = flatten(tree).map((c) => c.id);
+  if (filter.categoryId) {
+    const node = findById(tree, filter.categoryId);
     if (!node) return [];
     categoryIds = descendantIds(node);
   }
@@ -147,7 +146,7 @@ export async function listProducts(filter: ProductFilter): Promise<ProductCard[]
   const products = await prisma.product.findMany({
     where: {
       ...visible,
-      ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
+      categoryId: { in: categoryIds },
       ...(filter.inStock ? { isAvailable: true } : {}),
       ...(filter.maxDays ? { turnaroundDays: { lte: filter.maxDays } } : {}),
       ...(q
@@ -173,7 +172,7 @@ export async function listProducts(filter: ProductFilter): Promise<ProductCard[]
     name: byName,
     fastest: (a, b) => a.turnaroundDays - b.turnaroundDays || byName(a, b),
   };
-  return products.sort(sorters[filter.sort ?? "featured"]);
+  return withHrefs(products, tree).sort(sorters[filter.sort ?? "featured"]);
 }
 
 export async function getProductBySlug(slug: string) {
@@ -183,7 +182,7 @@ export async function getProductBySlug(slug: string) {
   return prisma.product.findFirst({
     where: { slug, ...visible },
     include: {
-      category: { select: { name: true, slug: true, parent: { select: { name: true, slug: true } } } },
+      category: { select: { id: true, name: true, slug: true, isVisible: true } },
       images: { orderBy: { sortOrder: "asc" }, select: { id: true, url: true, alt: true } },
       priceTiers: { orderBy: { minQuantity: "asc" }, select: { minQuantity: true, unitPriceMinor: true } },
       bulkDiscounts: { orderBy: { minQuantity: "asc" }, select: { minQuantity: true, percentBps: true } },
@@ -204,3 +203,62 @@ export async function getProductBySlug(slug: string) {
 }
 
 export type ProductDetail = NonNullable<Awaited<ReturnType<typeof getProductBySlug>>>;
+
+export type ResolvedPath =
+  | { kind: "category"; node: CategoryNode }
+  | { kind: "product"; product: ProductDetail; category: CategoryNode; canonical: string };
+
+/**
+ * Resolves /products/<…segments>: a category path, or a category path followed by a product slug.
+ * Old single-segment product links (/products/<slug>) still resolve, with the canonical URL attached.
+ */
+export async function resolveCatalogPath(segments: string[]): Promise<ResolvedPath | null> {
+  const tree = await getCategoryTree();
+  const node = findByPath(tree, segments);
+  if (node) return { kind: "category", node };
+
+  const product = await getProductBySlug(segments.at(-1) ?? "");
+  const category = product ? findById(tree, product.categoryId) : null;
+  if (!product || !category) return null;
+  return { kind: "product", product, category, canonical: productUrl(category.path, product.slug) };
+}
+
+/** Every public category path and product path, for static generation and the sitemap. */
+export async function getCatalogPaths() {
+  "use cache";
+  cacheTag(CATALOG_TAG);
+  cacheLife("hours");
+  const tree = await getCategoryTree();
+  const products = await prisma.product.findMany({
+    where: { ...visible, ...inVisibleCategories(tree) },
+    select: { slug: true, categoryId: true, updatedAt: true },
+  });
+  return {
+    categories: flatten(tree).map((c) => ({ path: c.path })),
+    products: products.flatMap((p) => {
+      const category = findById(tree, p.categoryId);
+      return category ? [{ path: [...category.path, p.slug], updatedAt: p.updatedAt }] : [];
+    }),
+  };
+}
+
+/** Other published products in the same category (then its parent), for "related products". */
+export async function getRelatedProducts(productId: string, categoryId: string, limit = 4): Promise<ProductCard[]> {
+  "use cache";
+  cacheTag(CATALOG_TAG);
+  cacheLife("hours");
+  const tree = await getCategoryTree();
+  const category = findById(tree, categoryId);
+  if (!category) return [];
+  const parent = category.path.length > 1 ? findByPath(tree, category.path.slice(0, -1)) : null;
+  const scope = descendantIds(parent ?? category);
+  const products = await prisma.product.findMany({
+    where: { ...visible, id: { not: productId }, categoryId: { in: scope } },
+    orderBy: [{ isFeatured: "desc" }, { name: "asc" }],
+    take: 12,
+    select: cardSelect,
+  });
+  // Same category first, then the rest of the parent's tree.
+  const sorted = [...products.filter((p) => p.categoryId === categoryId), ...products.filter((p) => p.categoryId !== categoryId)];
+  return withHrefs(sorted.slice(0, limit), tree);
+}

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { beforeEach, describe, expect, it } from "vitest";
+import sharp from "sharp";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import {
   addProductImage,
@@ -7,19 +8,46 @@ import {
   deleteCategory,
   deleteProduct,
   deleteProductImage,
+  moveCategory,
   reorderProductImages,
   saveCategory,
   saveProduct,
+  setCategoryImage,
+  setCategoryVisibility,
 } from "@/lib/admin/catalog-service";
-import { productInputSchema, type ProductInput } from "@/lib/admin/product-input";
+import { categoryInputSchema, productInputSchema, type CategoryData, type ProductInput } from "@/lib/admin/product-input";
+import { readCategoryTree } from "@/lib/catalog/queries";
+import { findByPath } from "@/lib/catalog/tree";
 import { addCartItem, createGuestCart, getCartView } from "@/lib/cart/service";
 import { registerUser } from "@/lib/auth/service";
 import { resolveLocal } from "@/lib/storage";
 import { resetDatabase } from "../support/db";
 import { validProduct } from "../support/fixtures";
 
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+let PNG: Uint8Array;
 let categoryId: string;
+
+beforeAll(async () => {
+  PNG = new Uint8Array(
+    await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 194, g: 24, b: 91 } } }).png().toBuffer(),
+  );
+});
+
+/** Category form data with defaults for the fields a test doesn't care about. */
+const cat = (data: Partial<Record<keyof CategoryData, unknown>> & { name: string; slug: string }): CategoryData =>
+  categoryInputSchema.parse({
+    description: "",
+    content: "",
+    parentId: "",
+    sortOrder: 0,
+    isVisible: true,
+    priceFrom: "",
+    priceUnit: "",
+    imageAlt: "",
+    seoTitle: "",
+    seoDescription: "",
+    ...data,
+  });
 
 const input = (overrides: Partial<ProductInput> = {}) => productInputSchema.parse({ ...validProduct, categoryId, ...overrides });
 
@@ -35,7 +63,7 @@ async function rejects(promise: Promise<unknown>, field: string, message: RegExp
 
 beforeEach(async () => {
   await resetDatabase();
-  categoryId = await saveCategory(null, { name: "Cards", slug: "cards", description: null, parentId: null, sortOrder: 0 });
+  categoryId = await saveCategory(null, cat({ name: "Cards", slug: "cards" }));
 });
 
 describe("saving products", () => {
@@ -145,6 +173,8 @@ describe("product images", () => {
     const id = await saveProduct(null, input());
     const first = await addProductImage(id, PNG, "Front");
     const second = await addProductImage(id, PNG);
+    // Uploads are converted to WebP and named after the image description.
+    expect(first.storageKey).toMatch(/^products\/[^/]+\/front-[0-9a-f]{6}\.webp$/);
     expect(first.url).toMatch(/^\/media\/products\//);
     expect(second.alt).toBe("Business Cards");
     expect(existsSync(resolveLocal(first.storageKey!))).toBe(true);
@@ -209,22 +239,70 @@ describe("deleting products", () => {
 
 describe("categories", () => {
   it("supports subcategories and prevents loops", async () => {
-    const child = await saveCategory(null, { name: "Premium", slug: "premium", description: null, parentId: categoryId, sortOrder: 0 });
-    const grandchild = await saveCategory(null, { name: "Foil", slug: "foil", description: null, parentId: child, sortOrder: 0 });
+    const child = await saveCategory(null, cat({ name: "Premium", slug: "premium", parentId: categoryId }));
+    const grandchild = await saveCategory(null, cat({ name: "Foil", slug: "foil", parentId: child }));
     await rejects(
-      saveCategory(categoryId, { name: "Cards", slug: "cards", description: null, parentId: grandchild, sortOrder: 0 }),
+      saveCategory(categoryId, cat({ name: "Cards", slug: "cards", parentId: grandchild })),
       "parentId",
       /inside itself/,
     );
-    await rejects(saveCategory(null, { name: "Dup", slug: "cards", description: null, parentId: null, sortOrder: 0 }), "slug", /slug/);
+    await rejects(saveCategory(null, cat({ name: "Dup", slug: "cards" })), "slug", /slug/);
   });
 
   it("refuses to delete categories that still have products or subcategories", async () => {
     await saveProduct(null, input());
     await rejects(deleteCategory(categoryId), "_form", /products/);
-    const parent = await saveCategory(null, { name: "Parent", slug: "parent", description: null, parentId: null, sortOrder: 0 });
-    await saveCategory(null, { name: "Child", slug: "child", description: null, parentId: parent, sortOrder: 0 });
+    const parent = await saveCategory(null, cat({ name: "Parent", slug: "parent" }));
+    await saveCategory(null, cat({ name: "Child", slug: "child", parentId: parent }));
     await rejects(deleteCategory(parent), "_form", /subcategories/);
+  });
+
+  it("allows the same slug under different parents, but not twice at one level", async () => {
+    const offset = await saveCategory(null, cat({ name: "Offset", slug: "offset" }));
+    const digital = await saveCategory(null, cat({ name: "Digital", slug: "digital" }));
+    await saveCategory(null, cat({ name: "Banners", slug: "banners", parentId: offset }));
+    await saveCategory(null, cat({ name: "Banners", slug: "banners", parentId: digital }));
+    await rejects(saveCategory(null, cat({ name: "Banners 2", slug: "banners", parentId: digital })), "slug", /at this level/);
+  });
+
+  it("builds the shared tree with paths, subtree product counts, order and visibility", async () => {
+    const premium = await saveCategory(null, cat({ name: "Premium", slug: "premium", parentId: categoryId, sortOrder: 2 }));
+    const matte = await saveCategory(null, cat({ name: "Matte", slug: "matte", parentId: categoryId, sortOrder: 1, priceFrom: "4.5", priceUnit: "per card" }));
+    const foil = await saveCategory(null, cat({ name: "Foil", slug: "foil", parentId: premium }));
+    await prisma.product.create({
+      data: { sku: "F1", slug: "foil-cards", name: "Foil cards", description: "x", categoryId: foil, basePriceMinor: 900, status: "PUBLISHED" },
+    });
+    await prisma.product.create({
+      data: { sku: "D1", slug: "draft-cards", name: "Draft", description: "x", categoryId: matte, basePriceMinor: 100, status: "DRAFT" },
+    });
+
+    let tree = await readCategoryTree();
+    const cards = findByPath(tree, ["cards"])!;
+    expect(cards.children.map((c) => c.slug)).toEqual(["matte", "premium"]);
+    expect(cards.productCount).toBe(1); // published products in the whole subtree; drafts are not counted
+    expect(findByPath(tree, ["cards", "premium", "foil"])).toMatchObject({ path: ["cards", "premium", "foil"], depth: 2, productCount: 1 });
+    expect(findByPath(tree, ["cards", "matte"])).toMatchObject({ priceFromMinor: 450, priceUnit: "per card" });
+
+    await moveCategory(premium, "up");
+    tree = await readCategoryTree();
+    expect(findByPath(tree, ["cards"])!.children.map((c) => c.slug)).toEqual(["premium", "matte"]);
+
+    // Hiding a category hides everything inside it.
+    await setCategoryVisibility(premium, false);
+    tree = await readCategoryTree();
+    expect(findByPath(tree, ["cards", "premium"])).toBeNull();
+    expect(findByPath(tree, ["cards"])!.productCount).toBe(0);
+  });
+
+  it("stores category images as WebP with a descriptive file name", async () => {
+    const id = await saveCategory(null, cat({ name: "3D Sign Board", slug: "3d-sign-board" }));
+    await setCategoryImage(id, PNG, "Illuminated 3D sign board");
+    const category = await prisma.category.findUniqueOrThrow({ where: { id } });
+    expect(category.imageKey).toMatch(/^categories\/3d-sign-board-[0-9a-f]{6}\.webp$/);
+    expect(category.imageAlt).toBe("Illuminated 3D sign board");
+    const bytes = await sharp(resolveLocal(category.imageKey!)).metadata();
+    expect(bytes.format).toBe("webp");
+    await rejects(setCategoryImage(id, new TextEncoder().encode("<svg/>")), "image", /JPG, PNG or WebP/);
   });
 });
 

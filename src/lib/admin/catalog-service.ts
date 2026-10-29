@@ -1,8 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
-import { checkImage } from "@/lib/storage/images";
-import { deleteFile, newKey, saveFile } from "@/lib/storage";
+import { deleteFile, saveFile } from "@/lib/storage";
+import { descriptiveKey, toWebp } from "@/lib/storage/webp";
 import type { CategoryData, FieldErrorMap, ProductData } from "./product-input";
 
 /** A problem the admin can fix; `field` points at the input to highlight. */
@@ -157,15 +157,16 @@ export async function deleteProduct(id: string): Promise<"deleted" | "archived">
 // ─── Product images ──────────────────────────────────────────────────────────
 
 export async function addProductImage(productId: string, bytes: Uint8Array, alt?: string) {
-  const check = checkImage(bytes);
-  if (!check.ok) throw new AdminInputError(check.error, "image");
+  const image = await toWebp(bytes);
+  if (!image.ok) throw new AdminInputError(image.error, "image");
   const product = await prisma.product.findUnique({
     where: { id: productId },
     select: { name: true, images: { select: { sortOrder: true }, orderBy: { sortOrder: "desc" }, take: 1 } },
   });
   if (!product) throw new AdminInputError("This product no longer exists.");
 
-  const stored = await saveFile(newKey(`products/${productId}`, check.ext), bytes, check.type);
+  const label = alt?.trim() || product.name;
+  const stored = await saveFile(descriptiveKey(`products/${productId}`, label, image.ext), image.bytes, image.type);
   return prisma.productImage.create({
     data: {
       productId,
@@ -210,7 +211,9 @@ export async function updateProductImageAlt(productId: string, imageId: string, 
 
 // ─── Categories ──────────────────────────────────────────────────────────────
 
-export async function saveCategory(id: string | null, data: CategoryData): Promise<string> {
+export async function saveCategory(id: string | null, input: CategoryData): Promise<string> {
+  const { priceFrom, ...rest } = input;
+  const data = { ...rest, priceFromMinor: priceFrom };
   if (data.parentId) {
     // Walk up from the new parent; reaching this category would create a loop.
     let cursor: string | null = data.parentId;
@@ -224,13 +227,23 @@ export async function saveCategory(id: string | null, data: CategoryData): Promi
       cursor = parent.parentId;
     }
   }
+  // Slugs only need to be unique among siblings (the URL is the path of slugs). Checked here because
+  // the database index treats every main service (no parent) as distinct.
+  const clash = await prisma.category.findFirst({
+    where: { parentId: data.parentId, slug: data.slug, ...(id ? { id: { not: id } } : {}) },
+    select: { id: true },
+  });
+  if (clash) throw new AdminInputError("Another category at this level already uses this slug.", "slug");
   try {
     const category = id
       ? await prisma.category.update({ where: { id }, data, select: { id: true } })
       : await prisma.category.create({ data, select: { id: true } });
     return category.id;
   } catch (error) {
-    if (uniqueViolation(error)?.includes("slug")) throw new AdminInputError("Another category already uses this slug.", "slug");
+    if (uniqueViolation(error)) throw new AdminInputError("Another category at this level already uses this slug.", "slug");
+    if (error instanceof Error && error.message.includes("Record to update not found")) {
+      throw new AdminInputError("This category no longer exists.");
+    }
     throw error;
   }
 }
@@ -238,12 +251,55 @@ export async function saveCategory(id: string | null, data: CategoryData): Promi
 export async function deleteCategory(id: string): Promise<void> {
   const category = await prisma.category.findUnique({
     where: { id },
-    select: { _count: { select: { products: true, children: true } } },
+    select: { imageKey: true, _count: { select: { products: true, children: true } } },
   });
   if (!category) return;
   if (category._count.children > 0) throw new AdminInputError("Move or delete its subcategories first.");
   if (category._count.products > 0) throw new AdminInputError("Move its products to another category first.");
   await prisma.category.delete({ where: { id } });
+  if (category.imageKey) await deleteFile(category.imageKey).catch(() => {});
+}
+
+/** Moves a category one place up or down among its siblings (renumbers the siblings 0, 1, 2, …). */
+export async function moveCategory(id: string, direction: "up" | "down"): Promise<void> {
+  const category = await prisma.category.findUnique({ where: { id }, select: { parentId: true } });
+  if (!category) throw new AdminInputError("This category no longer exists.");
+  const siblings = await prisma.category.findMany({
+    where: { parentId: category.parentId },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: { id: true },
+  });
+  const ids = siblings.map((s) => s.id);
+  const from = ids.indexOf(id);
+  const to = direction === "up" ? from - 1 : from + 1;
+  if (to < 0 || to >= ids.length) return;
+  [ids[from], ids[to]] = [ids[to], ids[from]];
+  await prisma.$transaction(ids.map((siblingId, sortOrder) => prisma.category.update({ where: { id: siblingId }, data: { sortOrder } })));
+}
+
+export async function setCategoryVisibility(id: string, isVisible: boolean): Promise<void> {
+  await prisma.category.updateMany({ where: { id }, data: { isVisible } });
+}
+
+/** Stores a category image as WebP with a descriptive file name, replacing any previous image. */
+export async function setCategoryImage(id: string, bytes: Uint8Array, alt?: string): Promise<void> {
+  const category = await prisma.category.findUnique({ where: { id }, select: { name: true, imageKey: true, imageAlt: true } });
+  if (!category) throw new AdminInputError("This category no longer exists.");
+  const image = await toWebp(bytes);
+  if (!image.ok) throw new AdminInputError(image.error, "image");
+  const stored = await saveFile(descriptiveKey("categories", category.name, image.ext), image.bytes, image.type);
+  await prisma.category.update({
+    where: { id },
+    data: { imageUrl: stored.url, imageKey: stored.key, imageAlt: alt?.trim().slice(0, 200) || category.imageAlt || category.name },
+  });
+  if (category.imageKey) await deleteFile(category.imageKey).catch(() => {});
+}
+
+export async function removeCategoryImage(id: string): Promise<void> {
+  const category = await prisma.category.findUnique({ where: { id }, select: { imageKey: true } });
+  if (!category) return;
+  await prisma.category.update({ where: { id }, data: { imageUrl: null, imageKey: null } });
+  if (category.imageKey) await deleteFile(category.imageKey).catch(() => {});
 }
 
 // ─── Reads for admin pages (never cached: staff need fresh data) ─────────────
@@ -304,8 +360,16 @@ export async function listAdminCategories() {
       name: true,
       slug: true,
       description: true,
+      content: true,
       parentId: true,
       sortOrder: true,
+      isVisible: true,
+      imageUrl: true,
+      imageAlt: true,
+      priceFromMinor: true,
+      priceUnit: true,
+      seoTitle: true,
+      seoDescription: true,
       _count: { select: { products: true, children: true } },
     },
   });

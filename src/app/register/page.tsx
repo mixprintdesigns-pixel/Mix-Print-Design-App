@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { RegisterForm } from "@/components/auth-forms";
 import { getCurrentUser, safeNextPath } from "@/lib/auth/session";
 
-export const metadata: Metadata = { title: "Create account" };
+export const metadata: Metadata = { title: "Create account", robots: { index: false } };
 
 export default function Page({ searchParams }: PageProps<"/register">) {
   return (

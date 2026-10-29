@@ -8,10 +8,10 @@ export const metadata: Metadata = { title: { default: "Admin", template: "%s · 
 const sections: { href: string; label: string; ready: boolean }[] = [
   { href: "/admin", label: "Dashboard", ready: true },
   { href: "/admin/products", label: "Products", ready: true },
-  { href: "/admin/categories", label: "Categories", ready: true },
-  { href: "/admin/services", label: "Services", ready: true },
+  { href: "/admin/categories", label: "Categories & Services", ready: true },
   { href: "/admin/reviews", label: "Reviews", ready: true },
   { href: "/admin/about", label: "About page", ready: true },
+  { href: "/admin/seo", label: "SEO", ready: true },
   { href: "/admin/messages", label: "Contact messages", ready: true },
   { href: "/admin/orders", label: "Orders", ready: false },
   { href: "/admin/designs", label: "Design work", ready: false },

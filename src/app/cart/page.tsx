@@ -8,7 +8,7 @@ import { removeCartItemAction } from "@/app/actions/cart";
 import { getCurrentCart } from "@/lib/cart/session";
 import { formatPKR } from "@/lib/money";
 
-export const metadata: Metadata = { title: "Your cart" };
+export const metadata: Metadata = { title: "Your cart", robots: { index: false } };
 
 export default function CartPage() {
   return (

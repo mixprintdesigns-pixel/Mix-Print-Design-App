@@ -3,17 +3,24 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { hashPassword } from "../src/lib/auth/password";
 import { resolveDatabaseUrl } from "../src/lib/database-url";
-import { categories, imagePath, products } from "./seed-data";
+import { imagePath, products } from "./seed-data";
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: resolveDatabaseUrl()! }) });
 
-async function main() {
-  for (const c of categories) {
-    await prisma.category.upsert({ where: { slug: c.slug }, create: c, update: c });
+/** Finds a category by its slug path ("offset-printing/business-cards"); the tree itself comes from the migrations. */
+async function categoryAt(path: string) {
+  let parentId: string | null = null;
+  for (const slug of path.split("/")) {
+    const found: { id: string } | null = await prisma.category.findFirst({ where: { parentId, slug }, select: { id: true } });
+    if (!found) throw new Error(`Seed: category "${path}" not found. Run the migrations first.`);
+    parentId = found.id;
   }
+  return { id: parentId! };
+}
 
+async function main() {
   for (const p of products) {
-    const category = await prisma.category.findUniqueOrThrow({ where: { slug: p.category } });
+    const category = await categoryAt(p.category);
     const data = {
       sku: p.slug.toUpperCase(),
       status: "PUBLISHED" as const,
@@ -70,51 +77,6 @@ async function main() {
     ]);
   }
 
-  // Demo service qualities and product → service links (the three categories and Board Maker
-  // sub-types come from the migration). Real qualities are added in Admin → Services.
-  const qualities: Record<string, [slug: string, title: string, text: string][]> = {
-    svc_board_backlit: [
-      ["standard", "Standard", "Economical backlit flex for everyday shop signs."],
-      ["premium", "Premium", "Brighter, more even light with premium translucent media."],
-    ],
-    svc_board_frontlit: [
-      ["standard", "Standard", "Durable front-lit flex with lights mounted above."],
-      ["premium", "Premium", "Heavier media and sharper print for long-lasting signs."],
-    ],
-    svc_board_3d: [
-      ["acrylic", "Acrylic letters", "Glossy acrylic letters with optional LED lighting."],
-      ["steel", "Steel letters", "Brushed or gold steel letters for a premium finish."],
-      ["pvc", "PVC letters", "Lightweight, budget-friendly raised letters."],
-    ],
-  };
-  for (const [subtypeId, list] of Object.entries(qualities)) {
-    if (!(await prisma.serviceSubtype.findUnique({ where: { id: subtypeId } }))) continue;
-    for (const [i, [slug, title, shortDescription]] of list.entries()) {
-      await prisma.serviceQuality.upsert({
-        where: { subtypeId_slug: { subtypeId, slug } },
-        create: { subtypeId, slug, title, shortDescription, sortOrder: i },
-        update: {},
-      });
-    }
-  }
-  const productServices: Record<string, string> = {
-    "standard-business-cards": "svc_offset",
-    "velvet-business-cards": "svc_offset",
-    "a5-flyers": "svc_offset",
-    "trifold-brochures": "svc_offset",
-    letterheads: "svc_offset",
-    envelopes: "svc_offset",
-    "mailer-boxes": "svc_offset",
-    "flex-banner": "svc_digital",
-    "roll-up-standee": "svc_digital",
-    "die-cut-stickers": "svc_digital",
-  };
-  for (const [slug, serviceCategoryId] of Object.entries(productServices)) {
-    if (await prisma.serviceCategory.findUnique({ where: { id: serviceCategoryId } })) {
-      await prisma.product.updateMany({ where: { slug, serviceCategoryId: null }, data: { serviceCategoryId } });
-    }
-  }
-
   // Demo admin for local development only.
   if (process.env.NODE_ENV !== "production") {
     const email = "admin@mixprint.local";
@@ -125,7 +87,7 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${categories.length} categories and ${products.length} products.`);
+  console.log(`Seeded ${products.length} demo products.`);
 }
 
 main()

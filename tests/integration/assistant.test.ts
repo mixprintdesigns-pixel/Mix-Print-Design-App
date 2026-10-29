@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { answerQuestion, type MessagesClient } from "@/lib/assistant/answer";
 import { ensureFreshIndex, searchKnowledge } from "@/lib/assistant/knowledge";
-import { saveLevel } from "@/lib/services/admin";
 import { createTestProduct, resetDatabase } from "../support/db";
 
 type Params = Anthropic.Beta.MessageCreateParamsNonStreaming;
@@ -32,8 +31,12 @@ beforeEach(async () => {
   await resetDatabase();
   const product = await createTestProduct({ slug: "glossy-business-cards" });
   await prisma.product.update({ where: { id: product.id }, data: { name: "Glossy Business Cards", summary: "Shiny premium visiting cards" } });
-  const board = await saveLevel("category", null, null, { title: "Board Maker", shortDescription: "Shop signs and boards", isVisible: true, slug: undefined });
-  await saveLevel("subtype", null, board, { title: "Backlit", shortDescription: "Illuminated signs that glow at night", isVisible: true, slug: undefined });
+  await prisma.category.update({ where: { id: product.categoryId }, data: { slug: "cards" } });
+  const board = await prisma.category.create({ data: { name: "Board Maker", slug: "board-maker", description: "Shop signs and boards" } });
+  await prisma.category.create({
+    data: { name: "Backlit Sign Board", slug: "backlit-sign-board", description: "Illuminated signs that glow at night", parentId: board.id },
+  });
+  await prisma.category.create({ data: { name: "Secret", slug: "secret", description: "Hidden backlit range", parentId: board.id, isVisible: false } });
 });
 
 describe("knowledge index", () => {
@@ -42,10 +45,13 @@ describe("knowledge index", () => {
     expect(await ensureFreshIndex()).toBe(false); // unchanged content: no rebuild
 
     const cards = await searchKnowledge("business card price");
-    expect(cards[0]).toMatchObject({ title: "Glossy Business Cards", url: "/products/glossy-business-cards" });
+    // Product links use the canonical /products/<category path>/<product> URL.
+    expect(cards[0]).toMatchObject({ title: "Glossy Business Cards", url: "/products/cards/glossy-business-cards" });
     expect(cards[0].content).toMatch(/PKR 3 per unit/);
 
-    expect((await searchKnowledge("backlit sign board"))[0]).toMatchObject({ url: "/services/board-maker#backlit" });
+    const boards = await searchKnowledge("backlit sign board");
+    expect(boards[0]).toMatchObject({ url: "/services/board-maker/backlit-sign-board", title: "Board Maker: Backlit Sign Board" });
+    expect(boards.map((h) => h.url)).not.toContain("/services/board-maker/secret"); // hidden categories are not indexed
     expect((await searchKnowledge("affiliate commission withdrawal"))[0]).toMatchObject({ url: "/affiliate" });
     expect((await searchKnowledge("whatsapp phone number"))[0].content).toContain("+92 303 488 9255");
   });
@@ -63,8 +69,8 @@ describe("answerQuestion", () => {
   it("lists matching pages when no API key is configured", async () => {
     const result = await answerQuestion("Do you make backlit boards?", [], null);
     expect(result.mode).toBe("site-search");
-    expect(result.answer).toContain("[Board Maker: Backlit](/services/board-maker#backlit)");
-    expect(result.sources[0].url).toBe("/services/board-maker#backlit");
+    expect(result.answer).toContain("[Board Maker: Backlit Sign Board](/services/board-maker/backlit-sign-board)");
+    expect(result.sources[0].url).toBe("/services/board-maker/backlit-sign-board");
   });
 
   it("hands off to WhatsApp when nothing matches and there is no API key", async () => {
@@ -77,7 +83,7 @@ describe("answerQuestion", () => {
     const { client, requests } = fakeClient([
       {
         content: [
-          text("Our [Glossy Business Cards](/products/glossy-business-cards) start at PKR 3 each. "),
+          text("Our [Glossy Business Cards](/products/cards/glossy-business-cards) start at PKR 3 each. "),
           text("Gloss lamination resists fingerprints.", [
             { type: "web_search_result_location", url: "https://example.org/finishes", title: "Print finishes", cited_text: "…", encrypted_index: "x" },
           ]),
@@ -89,7 +95,7 @@ describe("answerQuestion", () => {
     expect(result.mode).toBe("ai");
     expect(result.answer).toContain("PKR 3 each");
     expect(result.sources).toEqual([
-      { title: "Glossy Business Cards", url: "/products/glossy-business-cards" },
+      { title: "Glossy Business Cards", url: "/products/cards/glossy-business-cards" },
       { title: "Print finishes", url: "https://example.org/finishes" },
     ]);
 
@@ -100,7 +106,7 @@ describe("answerQuestion", () => {
     // Leading assistant greeting dropped; history then the question with site context
     expect(req.messages[0]).toEqual({ role: "user", content: "Hello" });
     const last = req.messages.at(-1)!;
-    expect(JSON.stringify(last.content)).toContain("URL: /products/glossy-business-cards");
+    expect(JSON.stringify(last.content)).toContain("URL: /products/cards/glossy-business-cards");
     expect(JSON.stringify(last.content)).toContain("Visitor question: How much are business cards?");
   });
 

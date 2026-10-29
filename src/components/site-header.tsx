@@ -14,10 +14,6 @@ const PAGES: NavLink[] = [
   { href: "/contact", label: "Contact Us" },
   { href: "/affiliate", label: "Earn with us" },
 ];
-const SHORTCUTS: NavLink[] = [
-  { href: "/products?category=business-cards", label: "Business cards" },
-  { href: "/products?category=marketing", label: "Marketing" },
-];
 
 export function SiteHeader() {
   return (
@@ -32,14 +28,9 @@ export function SiteHeader() {
               {l.label}
             </Link>
           ))}
-          {SHORTCUTS.map((l) => (
-            <Link key={l.href} href={l.href} className="hidden hover:text-foreground xl:inline">
-              {l.label}
-            </Link>
-          ))}
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm">
-          <MobileMenu links={[...PAGES, ...SHORTCUTS]} />
+          <MobileMenu links={PAGES} />
           {/* Reads cookies, so it streams in after the static shell. */}
           <Suspense fallback={<span className="h-9 w-32" aria-hidden />}>
             <HeaderSession />

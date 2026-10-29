@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -6,11 +5,9 @@ import { getPublicProgramTerms } from "@/lib/affiliate/public";
 import { getAffiliateForUser } from "@/lib/affiliate/service";
 import { formatPKR } from "@/lib/money";
 import { formatPercent } from "@/lib/pricing";
+import { pageMetadata } from "@/lib/content/seo-pages";
 
-export const metadata: Metadata = {
-  title: "Affiliate program — earn commission",
-  description: "Share MixPrint with your audience and earn commission on every printing order, paid to JazzCash, Easypaisa or your bank.",
-};
+export const generateMetadata = () => pageMetadata("affiliate");
 
 export default async function AffiliateLandingPage() {
   const terms = await getPublicProgramTerms();

@@ -2,30 +2,32 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { getAffiliateSettings } from "@/lib/affiliate/service";
 import { BUSINESS } from "@/lib/business";
+import { readCategoryTree } from "@/lib/catalog/queries";
+import { ancestry, findById, flatten, productUrl, serviceUrl, type CategoryNode } from "@/lib/catalog/tree";
 import { readAboutContent } from "@/lib/content/about";
 import { formatPKR } from "@/lib/money";
 import { formatPercent } from "@/lib/pricing";
 
 // The AI assistant's knowledge base: a searchable copy of the website's own content
-// (products, services, About, contact, affiliate program, ordering FAQ), stored in KnowledgeChunk.
+// (products, services/categories, About, contact, affiliate program, ordering FAQ), stored in KnowledgeChunk.
 // It is rebuilt automatically whenever the underlying content changes.
 
 export type Chunk = { sourceType: "PRODUCT" | "SERVICE" | "PAGE"; sourceId: string; title: string; url: string; content: string };
 
 const INDEX_KEY = "knowledge-index";
 
-async function productChunks(): Promise<Chunk[]> {
+async function productChunks(tree: CategoryNode[]): Promise<Chunk[]> {
   const products = await prisma.product.findMany({
-    where: { status: "PUBLISHED" },
+    where: { status: "PUBLISHED", categoryId: { in: flatten(tree).map((c) => c.id) } },
     include: {
-      category: { select: { name: true } },
       priceTiers: { orderBy: { minQuantity: "asc" } },
       bulkDiscounts: { orderBy: { minQuantity: "asc" } },
       options: { orderBy: { sortOrder: "asc" }, include: { values: { orderBy: { sortOrder: "asc" } } } },
-      serviceCategory: { select: { title: true } },
     },
   });
   return products.map((p) => {
+    const category = findById(tree, p.categoryId)!;
+    const chain = ancestry(tree, category).map((c) => c.name).join(" › ");
     const tiers = p.priceTiers.map((t) => `${t.minQuantity}+ units: ${formatPKR(t.unitPriceMinor)} each`).join("; ");
     const options = p.options
       .map((o) => `${o.name}: ${o.values.map((v) => (v.priceDeltaMinor ? `${v.label} (+${formatPKR(v.priceDeltaMinor)}${v.pricing === "PER_ORDER" ? " once" : "/unit"})` : v.label)).join(", ")}`)
@@ -35,9 +37,9 @@ async function productChunks(): Promise<Chunk[]> {
       sourceType: "PRODUCT",
       sourceId: p.id,
       title: p.name,
-      url: `/products/${p.slug}`,
+      url: productUrl(category.path, p.slug),
       content: [
-        `Product: ${p.name} (SKU ${p.sku}). Category: ${p.category.name}${p.serviceCategory ? `. Service: ${p.serviceCategory.title}` : ""}.`,
+        `Product: ${p.name} (SKU ${p.sku}). Category: ${chain}.`,
         p.summary ?? "",
         p.description,
         `Price: from ${formatPKR(p.basePriceMinor)} per unit${tiers ? `; volume prices ${tiers}` : ""}. Minimum order ${p.minQuantity} units${p.quantityStep > 1 ? ` in steps of ${p.quantityStep}` : ""}.`,
@@ -51,48 +53,27 @@ async function productChunks(): Promise<Chunk[]> {
   });
 }
 
-async function serviceChunks(): Promise<Chunk[]> {
-  const categories = await prisma.serviceCategory.findMany({
-    where: { isVisible: true },
-    orderBy: { sortOrder: "asc" },
-    include: {
-      subtypes: {
-        where: { isVisible: true },
-        orderBy: { sortOrder: "asc" },
-        include: { qualities: { where: { isVisible: true }, orderBy: { sortOrder: "asc" } } },
-      },
-      products: { where: { status: "PUBLISHED" }, select: { name: true } },
-    },
-  });
-  return categories.flatMap((c) => [
-    {
+/** One chunk per visible category at every level (main service, category, sub-category). */
+function categoryChunks(tree: CategoryNode[]): Chunk[] {
+  return flatten(tree).map((c) => {
+    const chain = ancestry(tree, c).map((a) => a.name);
+    return {
       sourceType: "SERVICE" as const,
       sourceId: c.id,
-      title: c.title,
-      url: `/services/${c.slug}`,
+      title: chain.join(": "),
+      url: serviceUrl(c.path),
       content: [
-        `Service: ${c.title}. ${c.shortDescription}`,
-        c.subtypes.length ? `Types: ${c.subtypes.map((s) => s.title).join(", ")}.` : "",
-        c.products.length ? `Products: ${c.products.map((p) => p.name).join(", ")}.` : "",
-        "Prices for this service are quoted per job: use Get Quote or WhatsApp.",
+        `Service: ${chain.join(" › ")}. ${c.description ?? ""}`,
+        c.content ?? "",
+        c.children.length ? `Types: ${c.children.map((s) => s.name).join(", ")}.` : "",
+        c.priceFromMinor != null
+          ? `Price: from ${formatPKR(c.priceFromMinor)}${c.priceUnit ? ` ${c.priceUnit}` : ""}; final price depends on size and quantity.`
+          : "Prices are quoted per job: use Get Quote or WhatsApp.",
       ]
         .filter(Boolean)
         .join("\n"),
-    },
-    ...c.subtypes.map((s) => ({
-      sourceType: "SERVICE" as const,
-      sourceId: s.id,
-      title: `${c.title}: ${s.title}`,
-      url: `/services/${c.slug}#${s.slug}`,
-      content: [
-        `${s.title} (${c.title}). ${s.shortDescription}`,
-        s.qualities.length ? `Qualities: ${s.qualities.map((q) => `${q.title} — ${q.shortDescription}`).join("; ")}.` : "",
-        "Prices are quoted per size and quality: use Get Quote or WhatsApp.",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    })),
-  ]);
+    };
+  });
 }
 
 async function pageChunks(): Promise<Chunk[]> {
@@ -130,22 +111,21 @@ async function pageChunks(): Promise<Chunk[]> {
 }
 
 export async function buildKnowledgeChunks(): Promise<Chunk[]> {
-  const [products, services, pages] = await Promise.all([productChunks(), serviceChunks(), pageChunks()]);
-  return [...pages, ...services, ...products];
+  const tree = await readCategoryTree();
+  const [products, pages] = await Promise.all([productChunks(tree), pageChunks()]);
+  return [...pages, ...categoryChunks(tree), ...products];
 }
 
 /** A cheap fingerprint of everything the index is built from. */
 async function contentSignature(): Promise<string> {
   const latest = (rows: { _max: { updatedAt: Date | null }; _count: number }) => `${rows._count}:${rows._max.updatedAt?.getTime() ?? 0}`;
-  const [products, cats, subs, quals, content, affiliate] = await Promise.all([
+  const [products, categories, content, affiliate] = await Promise.all([
     prisma.product.aggregate({ _max: { updatedAt: true }, _count: true }),
-    prisma.serviceCategory.aggregate({ _max: { updatedAt: true }, _count: true }),
-    prisma.serviceSubtype.aggregate({ _max: { updatedAt: true }, _count: true }),
-    prisma.serviceQuality.aggregate({ _max: { updatedAt: true }, _count: true }),
+    prisma.category.aggregate({ _max: { updatedAt: true }, _count: true }),
     prisma.siteContent.aggregate({ where: { key: { not: INDEX_KEY } }, _max: { updatedAt: true }, _count: true }),
     prisma.affiliateSettings.aggregate({ _max: { updatedAt: true }, _count: true }),
   ]);
-  return [products, cats, subs, quals, content, affiliate].map(latest).join("|");
+  return [products, categories, content, affiliate].map(latest).join("|");
 }
 
 /** Rebuilds the index if any site content changed since it was last built. Returns true if rebuilt. */

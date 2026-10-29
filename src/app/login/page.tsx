@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { LoginForm } from "@/components/auth-forms";
 import { getCurrentUser, safeNextPath } from "@/lib/auth/session";
 
-export const metadata: Metadata = { title: "Sign in" };
+export const metadata: Metadata = { title: "Sign in", robots: { index: false } };
 
 export default function Page({ searchParams }: PageProps<"/login">) {
   return (

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/session";
 
-export const metadata: Metadata = { title: "My account" };
+export const metadata: Metadata = { title: "My account", robots: { index: false } };
 
 export default function AccountPage() {
   return (

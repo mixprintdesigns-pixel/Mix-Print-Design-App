@@ -10,6 +10,7 @@ export type SeedOption = {
 export type SeedProduct = {
   slug: string;
   name: string;
+  /** Slug path in the category tree created by the migrations, e.g. "offset-printing/business-cards". */
   category: string;
   summary: string;
   description: string;
@@ -24,22 +25,13 @@ export type SeedProduct = {
   imageViews: string[]; // one image is generated per view
 };
 
-export const categories = [
-  { slug: "business-cards", name: "Business Cards", description: "Make a strong first impression.", sortOrder: 1 },
-  { slug: "marketing", name: "Flyers & Brochures", description: "Promote offers, menus and events.", sortOrder: 2 },
-  { slug: "large-format", name: "Banners & Standees", description: "Big, bold signage for shops and events.", sortOrder: 3 },
-  { slug: "stickers-labels", name: "Stickers & Labels", description: "Die-cut stickers and product labels.", sortOrder: 4 },
-  { slug: "packaging", name: "Packaging", description: "Branded boxes and bags.", sortOrder: 5 },
-  { slug: "stationery", name: "Office Stationery", description: "Letterheads, envelopes and more.", sortOrder: 6 },
-];
-
 const sides: SeedOption = { name: "Printed sides", kind: "OTHER", values: [["Front only", 0], ["Front & back", 100]] };
 
 export const products: SeedProduct[] = [
   {
     slug: "standard-business-cards",
     name: "Standard Business Cards",
-    category: "business-cards",
+    category: "offset-printing/business-cards",
     summary: "Classic 3.5 × 2 inch cards on thick premium card stock.",
     description:
       "Our best-selling business cards, printed in full colour on 350–400gsm card.\n\nUpload your own artwork or ask our design team to create one for you. You will receive a digital proof to approve before anything is printed.",
@@ -59,7 +51,7 @@ export const products: SeedProduct[] = [
   {
     slug: "velvet-business-cards",
     name: "Velvet Touch Business Cards",
-    category: "business-cards",
+    category: "offset-printing/business-cards",
     summary: "Soft-touch laminated cards with an ultra-premium feel.",
     description: "450gsm board with velvet lamination on both sides. Pairs beautifully with gold or silver foil.",
     basePriceMinor: 1200,
@@ -77,7 +69,7 @@ export const products: SeedProduct[] = [
   {
     slug: "a5-flyers",
     name: "A5 Flyers",
-    category: "marketing",
+    category: "offset-printing/flyers-leaflets/a5-flyers",
     summary: "Full-colour flyers for menus, offers and events.",
     description: "Printed on glossy art paper. Ideal for restaurant menus, sale announcements and door-to-door distribution.",
     basePriceMinor: 1500,
@@ -96,7 +88,7 @@ export const products: SeedProduct[] = [
   {
     slug: "trifold-brochures",
     name: "Tri-fold Brochures (A4)",
-    category: "marketing",
+    category: "offset-printing/brochures/tri-fold",
     summary: "A4 brochures folded into three panels.",
     description: "Perfect for company profiles, price lists and product catalogues. Printed both sides and machine folded.",
     basePriceMinor: 4500,
@@ -110,7 +102,7 @@ export const products: SeedProduct[] = [
   {
     slug: "flex-banner",
     name: "Vinyl Flex Banner",
-    category: "large-format",
+    category: "digital-printing/flex-printing",
     summary: "Weather-proof banners for shop fronts and events.",
     description: "High-resolution solvent printing on 13oz flex. Hemmed edges with metal eyelets for easy hanging.",
     basePriceMinor: 350000,
@@ -127,7 +119,7 @@ export const products: SeedProduct[] = [
   {
     slug: "roll-up-standee",
     name: "Roll-up Standee",
-    category: "large-format",
+    category: "digital-printing/standees-roll-up-banners/roll-up-standee",
     summary: "Portable 2.5 × 6.5 ft retractable banner with carry bag.",
     description: "Aluminium base, printed media and nylon carry bag included. Sets up in under a minute.",
     basePriceMinor: 1100000,
@@ -140,7 +132,7 @@ export const products: SeedProduct[] = [
   {
     slug: "die-cut-stickers",
     name: "Die-cut Stickers",
-    category: "stickers-labels",
+    category: "offset-printing/stickers-labels/die-cut-stickers",
     summary: "Custom shaped stickers cut to your design.",
     description: "Great for packaging, laptops and giveaways. Choose paper for indoor use or vinyl for durability.",
     basePriceMinor: 2500,
@@ -159,7 +151,7 @@ export const products: SeedProduct[] = [
   {
     slug: "mailer-boxes",
     name: "Custom Mailer Boxes",
-    category: "packaging",
+    category: "offset-printing/packaging-boxes/mailer-boxes",
     summary: "Branded corrugated boxes for e-commerce shipping.",
     description: "Sturdy E-flute mailer boxes printed in full colour. Flat-packed and easy to assemble.",
     basePriceMinor: 18000,
@@ -178,7 +170,7 @@ export const products: SeedProduct[] = [
   {
     slug: "letterheads",
     name: "Letterheads",
-    category: "stationery",
+    category: "offset-printing/letterheads",
     summary: "A4 letterheads on 100gsm bond paper.",
     description: "Professional letterheads that work in inkjet and laser printers.",
     basePriceMinor: 1200,
@@ -192,7 +184,7 @@ export const products: SeedProduct[] = [
   {
     slug: "envelopes",
     name: "Printed Envelopes",
-    category: "stationery",
+    category: "offset-printing/envelopes",
     summary: "Branded envelopes with your logo and return address.",
     description: "Available in common office sizes with peel-and-seal closure.",
     basePriceMinor: 2000,

@@ -52,17 +52,17 @@ test.describe("admin catalog management", () => {
 
     // Subcategory under an existing category
     await page.goto("/admin/categories");
-    await page.getByLabel("Name").fill(categoryName);
-    await page.getByLabel("Parent category").selectOption({ label: "Stickers & Labels" });
+    await page.getByLabel("Name", { exact: true }).fill(categoryName);
+    await page.getByLabel("Inside").selectOption({ label: "— Stickers & Labels" });
     await page.getByRole("button", { name: "Add category" }).click();
-    await expect(page.getByRole("cell", { name: categoryName })).toBeVisible();
+    await expect(page.getByTestId("category-row").filter({ hasText: categoryName })).toContainText("Sub-category");
 
     // New product
     await page.goto("/admin/products/new");
     await page.getByLabel("Product name").fill(productName);
     await expect(page.getByLabel("URL slug")).toHaveValue(`e2e-stickers-${run}`);
     await page.getByLabel("SKU (unique product code)").fill(`E2E-${run}`);
-    await page.getByLabel("Category").selectOption({ label: `— ${categoryName}` });
+    await page.getByLabel("Category").selectOption({ label: `— — ${categoryName}` });
     await page.getByLabel("Short description").fill("Test sticker sheets");
     await page.getByLabel("Full description").fill("Created by the end-to-end test.");
     await page.getByLabel("Base price per unit (PKR)").fill("5");
@@ -124,10 +124,18 @@ test.describe("admin catalog management", () => {
     await editor.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Product saved and visible in the store.")).toBeVisible();
 
+    // It appears automatically in its category, its parents' listings and on the Services page.
+    await page.goto(`/services/offset-printing/stickers-labels/e2e-sheets-${run}`);
+    await expect(page.getByRole("heading", { level: 1, name: categoryName })).toBeVisible();
+    await expect(page.getByTestId("product-card").filter({ hasText: productName })).toBeVisible();
+    await page.goto("/products/offset-printing");
+    await expect(page.getByTestId("product-card").filter({ hasText: productName })).toBeVisible();
+
     // Customer view: subcategory, gallery, price, cart
-    await page.goto("/products?category=stickers-labels");
-    await page.getByRole("navigation", { name: "Subcategories" }).getByRole("link", { name: new RegExp(categoryName) }).click();
+    await page.goto("/products/offset-printing/stickers-labels");
+    await page.getByRole("navigation", { name: "Stickers & Labels types" }).getByRole("link", { name: new RegExp(categoryName) }).click();
     await page.getByRole("link", { name: new RegExp(productName) }).click();
+    await expect(page).toHaveURL(new RegExp(`/products/offset-printing/stickers-labels/e2e-sheets-${run}/e2e-stickers-${run}$`));
     await expect(page.getByRole("heading", { level: 1, name: productName })).toBeVisible();
     await expect(page.getByRole("list", { name: "Product images" }).getByRole("button")).toHaveCount(2);
     await expect(page.getByRole("img", { name: "Blue sheet" }).first()).toBeVisible();
@@ -170,7 +178,7 @@ test.describe("admin catalog management", () => {
 
 test("catalog sorting and filters", async ({ page }) => {
   await page.goto("/products?sort=price-desc");
-  await expect(page.locator("main a[href^='/products/']").first()).toContainText("Roll-up Standee");
+  await expect(page.getByTestId("product-card").first()).toContainText("Roll-up Standee");
 
   await page.goto("/products");
   await page.getByLabel("Production time").selectOption("2");

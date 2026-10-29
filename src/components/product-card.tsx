@@ -7,7 +7,8 @@ export function ProductCard({ product }: { product: ProductCardData }) {
   const image = product.images[0];
   return (
     <Link
-      href={`/products/${product.slug}`}
+      href={product.href}
+      data-testid="product-card"
       className="card group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lg"
     >
       <div className="relative aspect-[4/3] bg-background">

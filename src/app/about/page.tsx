@@ -1,13 +1,10 @@
-import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { BUSINESS, quoteLink, whatsappLink } from "@/lib/business";
 import { getAboutContent } from "@/lib/content/about";
+import { pageMetadata } from "@/lib/content/seo-pages";
 
-export const metadata: Metadata = {
-  title: "About us",
-  description: "Mix Print Design is a printing, signage and design studio on Raiwind Road, Lahore.",
-};
+export const generateMetadata = () => pageMetadata("about");
 
 export default async function AboutPage() {
   const about = await getAboutContent();

@@ -161,11 +161,30 @@ export const categoryInputSchema = z.object({
   name: z.string().trim().min(2, "Enter a category name.").max(80),
   slug: slugSchema,
   description: optionalText(300),
+  content: optionalText(4000),
   parentId: z
     .string()
     .trim()
     .transform((v) => v || null),
   sortOrder: int("Sort order", 0, 10_000),
+  isVisible: z.boolean(),
+  /** Optional "from" price in rupees; empty means the category shows "Get Quote". */
+  priceFrom: z
+    .string()
+    .trim()
+    .transform((v, ctx) => {
+      if (!v) return null;
+      const minor = parseRupees(v);
+      if (minor === null) {
+        ctx.addIssue({ code: "custom", message: "Starting price: enter an amount in rupees, e.g. 45, or leave it empty for Get Quote." });
+        return z.NEVER;
+      }
+      return minor;
+    }),
+  priceUnit: optionalText(30),
+  imageAlt: optionalText(200),
+  seoTitle: optionalText(70),
+  seoDescription: optionalText(160),
 });
 export type CategoryData = z.output<typeof categoryInputSchema>;
 

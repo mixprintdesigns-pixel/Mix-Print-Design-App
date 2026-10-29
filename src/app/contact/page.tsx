@@ -1,12 +1,9 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ContactForm } from "@/components/contact-form";
 import { BUSINESS, MAP_EMBED_URL, whatsappLink } from "@/lib/business";
+import { pageMetadata } from "@/lib/content/seo-pages";
 
-export const metadata: Metadata = {
-  title: "Contact us",
-  description: `Contact Mix Print Design on Raiwind Road, Lahore. Call or WhatsApp ${BUSINESS.phoneDisplay}.`,
-};
+export const generateMetadata = () => pageMetadata("contact");
 
 const details = [
   { label: "Phone", value: BUSINESS.phoneDisplay, href: `tel:${BUSINESS.phoneTel}` },

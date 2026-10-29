@@ -80,17 +80,32 @@ model Address {
 
 // ─── Catalog ──────────────────────────────────────────────────────────────────
 
+// One category tree shared by the Services and Products pages:
+// Main Service → Category → Sub-category → … (unlimited nesting). Products belong to one category.
 model Category {
-  id          String     @id @default(cuid())
-  name        String
-  slug        String     @unique
-  description String?
-  imageUrl    String?
-  sortOrder   Int        @default(0)
-  parentId    String?
-  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children    Category[] @relation("CategoryTree")
-  products    Product[]
+  id             String     @id @default(cuid())
+  name           String
+  slug           String // unique among siblings; URL segment, e.g. /services/board-maker/3d-sign-board
+  description    String? // short summary for cards and default meta description
+  content        String? // page description (100–200 words), editable in admin
+  imageUrl       String?
+  imageKey       String? // storage key of an uploaded image
+  imageAlt       String?
+  sortOrder      Int        @default(0)
+  isVisible      Boolean    @default(true)
+  priceFromMinor Int? // "from" price set by the owner; empty shows "Get Quote"
+  priceUnit      String? // e.g. "per sq. ft"
+  seoTitle       String?
+  seoDescription String?
+  parentId       String?
+  parent         Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Category[] @relation("CategoryTree")
+  products       Product[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @default(now()) @updatedAt
+
+  @@unique([parentId, slug])
+  @@index([parentId, sortOrder])
 }
 
 enum ProductStatus {

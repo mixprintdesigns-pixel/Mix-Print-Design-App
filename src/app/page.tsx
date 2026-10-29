@@ -2,27 +2,53 @@ import Link from "next/link";
 import { BrandLogo } from "@/components/brand-logo";
 import { ProductCard } from "@/components/product-card";
 import { ReviewCard } from "@/components/reviews/review-card";
-import { ServiceCard } from "@/components/services/service-card";
+import { CategoryCard } from "@/components/catalog/category-card";
+import { JsonLd } from "@/components/catalog/json-ld";
+import { QuoteButtons } from "@/components/services/quote-buttons";
 import { quoteLink } from "@/lib/business";
 import { getCategoryTree, getFeaturedProducts } from "@/lib/catalog/queries";
+import { categoryUrl, serviceUrl } from "@/lib/catalog/tree";
+import { pageMetadata } from "@/lib/content/seo-pages";
 import { getPublishedReviews } from "@/lib/reviews/queries";
-import { getServiceTree } from "@/lib/services/queries";
+import { localBusinessJsonLd } from "@/lib/seo";
 import { getPublicProgramTerms } from "@/lib/affiliate/public";
 import { formatPKR } from "@/lib/money";
 import { formatPercent } from "@/lib/pricing";
 
+export const generateMetadata = () => pageMetadata("home");
+
+/** Customer reviews as structured data on the business (shown in search results as star ratings). */
+function reviewsJsonLd(reviews: Awaited<ReturnType<typeof getPublishedReviews>>) {
+  if (reviews.length === 0) return null;
+  return localBusinessJsonLd({
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1),
+      reviewCount: reviews.length,
+      bestRating: 5,
+    },
+    review: reviews.map((r) => ({
+      "@type": "Review",
+      author: { "@type": "Person", name: r.name },
+      reviewRating: { "@type": "Rating", ratingValue: r.rating, bestRating: 5 },
+      reviewBody: r.comment,
+    })),
+  });
+}
+
 // Catalog data is cached ("use cache"), so this whole page prerenders into the static shell.
 export default async function HomePage() {
-  const [categories, featured, affiliate, services, reviews] = await Promise.all([
+  const [services, featured, affiliate, reviews] = await Promise.all([
     getCategoryTree(),
     getFeaturedProducts(),
     getPublicProgramTerms(),
-    getServiceTree(),
     getPublishedReviews(),
   ]);
+  const reviewData = reviewsJsonLd(reviews);
 
   return (
     <>
+      {reviewData && <JsonLd data={reviewData} />}
       {/* 1. Hero */}
       <section className="relative overflow-hidden border-b border-border bg-surface">
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
@@ -85,7 +111,7 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* 3. Services */}
+      {/* 3. Services: the main services from the shared category tree */}
       {services.length > 0 && (
         <section className="mx-auto max-w-6xl px-4 pt-14" aria-labelledby="services-heading">
           <div className="flex flex-wrap items-end justify-between gap-3">
@@ -99,9 +125,12 @@ export default async function HomePage() {
               All services →
             </Link>
           </div>
-          <div className="mt-5 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {services.map((s, i) => (
-              <ServiceCard key={s.id} service={s} index={i} />
+              <div key={s.id} className="flex flex-col gap-2">
+                <CategoryCard category={s} href={serviceUrl(s.path)} index={i} />
+                <QuoteButtons subject={s.name} compact />
+              </div>
             ))}
           </div>
         </section>
@@ -124,18 +153,35 @@ export default async function HomePage() {
         </section>
       )}
 
-      <section className="mx-auto max-w-6xl px-4 py-12">
-        <h2 className="text-2xl font-bold">Shop by category</h2>
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {categories.map((c) => (
-            <Link
-              key={c.id}
-              href={`/products?category=${c.slug}`}
-              className="card p-4 transition hover:border-brand"
-            >
-              <p className="font-semibold">{c.name}</p>
-              {c.description && <p className="mt-1 line-clamp-2 text-sm text-muted">{c.description}</p>}
-            </Link>
+      <section className="mx-auto max-w-6xl px-4 py-12" aria-labelledby="categories-heading">
+        <h2 id="categories-heading" className="text-2xl font-bold">
+          Shop by category
+        </h2>
+        <div className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {services.map((s) => (
+            <div key={s.id}>
+              <h3 className="font-semibold">
+                <Link href={categoryUrl(s.path)} className="hover:text-brand">
+                  {s.name}
+                </Link>
+              </h3>
+              <ul className="mt-2 space-y-1 text-sm">
+                {s.children.slice(0, 8).map((c) => (
+                  <li key={c.id}>
+                    <Link href={categoryUrl(c.path)} className="text-muted hover:text-brand">
+                      {c.name}
+                    </Link>
+                  </li>
+                ))}
+                {s.children.length > 8 && (
+                  <li>
+                    <Link href={categoryUrl(s.path)} className="font-semibold text-brand">
+                      All {s.children.length} categories →
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            </div>
           ))}
         </div>
       </section>

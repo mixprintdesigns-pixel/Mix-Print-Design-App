@@ -45,8 +45,13 @@ test.describe("home page", () => {
     await expect(top.getByRole("link", { name: /Standard Business Cards/ })).toBeVisible();
 
     const services = page.getByRole("region", { name: "Our services" });
-    await expect(services.getByTestId("service-card")).toHaveCount(3);
-    await expect(services.getByRole("link", { name: "Backlit" })).toHaveAttribute("href", "/services/board-maker#backlit");
+    await expect(services.getByTestId("category-card")).toHaveCount(4);
+    await expect(services.getByRole("link", { name: "Board Maker", exact: true })).toHaveAttribute("href", "/services/board-maker");
+    await expect(services.getByRole("link", { name: "Customized Printing", exact: true })).toHaveAttribute("href", "/services/customized-printing");
+    await expect(page.getByRole("region", { name: "Shop by category" }).getByRole("link", { name: "Business Cards", exact: true })).toHaveAttribute(
+      "href",
+      "/products/offset-printing/business-cards",
+    );
 
     const reviews = page.getByRole("region", { name: "What our customers say" });
     await expect(reviews.getByText(`Ayesha ${run}`)).toBeVisible();
@@ -66,63 +71,85 @@ test.describe("home page", () => {
 });
 
 test.describe("services", () => {
-  test("services page shows the initial categories and Board Maker sub-types", async ({ page }) => {
+  test("four main services drill down service → category → sub-category, with breadcrumbs and quotes", async ({ page }) => {
     await page.goto("/services");
-    for (const title of ["Board Maker", "Offset Printing", "Digital Printing"]) {
-      await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
+    await expect(page.locator("h1")).toHaveCount(1);
+    for (const title of ["Board Maker", "Offset Printing", "Digital Printing", "Customized Printing"]) {
+      await expect(page.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible();
     }
-    await page.getByRole("link", { name: "View Board Maker →" }).click();
-    await expect(page).toHaveURL(/\/services\/board-maker$/);
-    await expect(page.getByTestId("service-subtype")).toHaveCount(3);
-    const backlit = page.locator("#backlit");
-    await expect(backlit.getByRole("link", { name: "Get Quote for Board Maker / Backlit", exact: true })).toHaveAttribute(
+    const board = page.getByTestId("main-service").filter({ has: page.getByRole("heading", { level: 2, name: "Board Maker" }) });
+    await expect(board.getByRole("heading", { level: 3 })).toHaveText(["Backlit Sign Board", "Front-lit Sign Board", "3D Sign Board"]);
+
+    await board.getByRole("link", { name: "3D Sign Board", exact: true }).click();
+    await expect(page).toHaveURL(/\/services\/board-maker\/3d-sign-board$/);
+    await expect(page.getByRole("heading", { level: 1, name: "3D Sign Board" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Services/Board Maker/3D Sign Board");
+    const types = page.getByRole("region", { name: "3D Sign Board types" });
+    await expect(types.getByRole("heading", { level: 3 })).toHaveText([
+      "Simple Sign",
+      "2D Sign",
+      "3D Sign",
+      "Acrylic + Logo Board",
+      "Glitter Sign",
+      "Aluminium Sign",
+      "SS (Stainless Steel) Sign",
+    ]);
+    await expect(types.getByText("Get Quote").first()).toBeVisible(); // no price set → Get Quote
+    await expect(page.getByRole("link", { name: "Get Quote for Board Maker / 3D Sign Board", exact: true }).first()).toHaveAttribute(
       "href",
-      "/contact?subject=Quote%3A%20Board%20Maker%20%2F%20Backlit",
+      "/contact?subject=Quote%3A%20Board%20Maker%20%2F%203D%20Sign%20Board",
     );
-    await expect(backlit.getByRole("link", { name: "WhatsApp about Board Maker / Backlit", exact: true })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: "WhatsApp about Board Maker / 3D Sign Board", exact: true }).first()).toHaveAttribute(
       "href",
-      /^https:\/\/wa\.me\/923034889255\?text=.*Backlit/,
+      /^https:\/\/wa\.me\/923034889255\?text=.*3D%20Sign%20Board/,
     );
+
+    await types.getByRole("link", { name: "Glitter Sign", exact: true }).click();
+    await expect(page).toHaveURL(/\/services\/board-maker\/3d-sign-board\/glitter-sign$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Glitter Sign" })).toBeVisible();
+
+    // The Products page uses the same tree.
+    await page.goto("/products/digital-printing/flex-printing");
+    await expect(page.getByRole("heading", { level: 1, name: "Flex Printing" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Flex Printing types" }).getByRole("link")).toHaveText([
+      /China Flex/,
+      /HD Star Flex/,
+      /^Star Flex/,
+      /Korean Star Flex/,
+    ]);
+    await page.goto("/services/customized-printing");
+    await expect(page.getByRole("region", { name: "Customized Printing types" }).getByTestId("category-card")).toHaveCount(12);
   });
 
-  test("admin adds a quality and links a product; it appears on the services page automatically", async ({ page, browser, isMobile }) => {
+  test("admin adds a priced sub-category; it appears on Services and Products, and hiding removes it", async ({ page, browser, isMobile }) => {
     test.skip(isMobile, "Admin workflow runs on desktop");
     const run = Date.now().toString(36);
-    const qualityTitle = `Ultra ${run}`;
+    const name = `Ultra Backlit ${run}`;
     const admin = await adminPage(browser);
-    await admin.goto("/admin/services");
+    await admin.goto("/admin/categories");
+    await expect(admin.getByRole("heading", { level: 1, name: "Categories & Services" })).toBeVisible();
+    const form = admin.locator("form").filter({ has: admin.getByRole("button", { name: "Add category" }) });
+    await form.getByLabel("Name", { exact: true }).fill(name);
+    await form.getByLabel("Inside").selectOption({ label: "— Backlit Sign Board" });
+    await form.getByLabel("Short description").fill("Our brightest backlit board.");
+    await form.getByLabel("Starting price (Rs)").fill("450");
+    await form.getByLabel("Price unit").fill("per sq. ft");
+    await form.getByRole("button", { name: "Add category" }).click();
+    const row = admin.getByTestId("category-row").filter({ hasText: name });
+    await expect(row).toContainText(`/board-maker/backlit-sign-board/ultra-backlit-${run}`);
 
-    const backlit = admin.getByTestId("admin-subtype").filter({ has: admin.getByRole("heading", { name: "Backlit", exact: true }) });
-    await backlit.getByText("+ Add quality to Backlit").click();
-    const addForm = backlit.locator("form").filter({ has: admin.getByRole("button", { name: "Add quality" }) });
-    await addForm.getByLabel("Title").fill(qualityTitle);
-    await addForm.getByLabel("Short description").fill("Our brightest backlit quality.");
-    await addForm.getByRole("button", { name: "Add quality" }).click();
-    const quality = admin.getByTestId("admin-quality").filter({ hasText: qualityTitle });
-    await expect(quality).toBeVisible();
+    await page.goto("/services/board-maker/backlit-sign-board");
+    const card = page.getByTestId("category-card").filter({ hasText: name });
+    await expect(card).toContainText("From PKR 450 per sq. ft");
+    await page.goto("/products/board-maker/backlit-sign-board");
+    await expect(page.getByRole("navigation", { name: "Backlit Sign Board types" }).getByRole("link", { name: new RegExp(name) })).toBeVisible();
 
-    await quality.getByLabel(`Link a product to ${qualityTitle}`).selectOption({ label: "Vinyl Flex Banner (moves it here)" });
-    await quality.getByRole("button", { name: "Link", exact: true }).click();
-    await expect(quality.getByTestId("linked-product")).toContainText("Vinyl Flex Banner");
-
-    await page.goto("/services/board-maker#backlit");
-    const card = page.getByTestId("service-quality").filter({ hasText: qualityTitle });
-    await expect(card).toBeVisible();
-    await expect(page.getByRole("list", { name: `${qualityTitle} products` }).getByRole("link", { name: /Vinyl Flex Banner/ })).toBeVisible();
-
-    // Hide the quality: it disappears from the website
-    await quality.getByText("Edit quality").click();
-    await quality.getByLabel("Visible on the website").uncheck();
-    await quality.getByRole("button", { name: "Save" }).click();
-    await expect(quality).toContainText("hidden");
-    await page.reload();
-    await expect(page.getByTestId("service-quality").filter({ hasText: qualityTitle })).toHaveCount(0);
-
-    // Put the product back under Digital Printing for other tests
-    const digital = admin.getByTestId("admin-service").filter({ has: admin.getByRole("heading", { name: "Digital Printing" }) });
-    await digital.getByLabel("Link a product to Digital Printing").first().selectOption({ label: "Vinyl Flex Banner (moves it here)" });
-    await digital.getByRole("button", { name: "Link", exact: true }).first().click();
-    await expect(digital.getByTestId("linked-product").filter({ hasText: "Vinyl Flex Banner" }).first()).toBeVisible();
+    await row.getByRole("button", { name: `Hide ${name}` }).click();
+    await expect(row).toContainText("Hidden");
+    await page.goto("/services/board-maker/backlit-sign-board");
+    await expect(page.getByTestId("category-card").filter({ hasText: name })).toHaveCount(0);
+    await page.goto(`/services/board-maker/backlit-sign-board/ultra-backlit-${run}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
   });
 });
 
@@ -157,10 +184,10 @@ test.describe("contact page", () => {
     const page = await context.newPage();
     const run = Date.now().toString(36);
 
-    await page.goto("/services/board-maker");
-    await page.getByRole("link", { name: "Get Quote for Board Maker / 3D", exact: true }).click();
+    await page.goto("/services/board-maker/3d-sign-board");
+    await page.getByRole("link", { name: "Get Quote for Board Maker / 3D Sign Board", exact: true }).first().click();
     await expect(page).toHaveURL(/\/contact\?subject=/);
-    await expect(page.getByLabel("Subject (optional)")).toHaveValue("Quote: Board Maker / 3D");
+    await expect(page.getByLabel("Subject (optional)")).toHaveValue("Quote: Board Maker / 3D Sign Board");
 
     await expect(page.getByRole("link", { name: "+92 303 488 9255" }).first()).toHaveAttribute("href", "tel:+923034889255");
     await expect(page.getByRole("link", { name: "mixprintdesigns@gmail.com" })).toHaveAttribute("href", "mailto:mixprintdesigns@gmail.com");
@@ -183,7 +210,7 @@ test.describe("contact page", () => {
     const admin = await adminPage(browser);
     await admin.goto("/admin/messages");
     const message = admin.getByTestId("contact-message").filter({ hasText: `Visitor ${run}` });
-    await expect(message).toContainText("Quote: Board Maker / 3D");
+    await expect(message).toContainText("Quote: Board Maker / 3D Sign Board");
     await expect(message).toContainText("Please quote a 3D steel letter sign");
     await expect(message).toContainText("Not emailed"); // no email key in the test environment
     await message.getByRole("button", { name: "Mark as handled" }).click();
@@ -212,8 +239,8 @@ test.describe("AI chat assistant", () => {
     await chat.getByRole("button", { name: "Do you make backlit boards?" }).click();
     const answer = chat.getByTestId("chat-answer").nth(1);
     await expect(answer).toContainText("Backlit");
-    const link = answer.getByRole("link", { name: "Board Maker: Backlit" });
-    await expect(link).toHaveAttribute("href", "/services/board-maker#backlit");
+    const link = answer.getByRole("link", { name: "Board Maker", exact: true });
+    await expect(link).toHaveAttribute("href", "/services/board-maker");
 
     // The chat panel must fit inside a phone screen
     const box = await chat.boundingBox();
@@ -222,7 +249,7 @@ test.describe("AI chat assistant", () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
 
     await link.click();
-    await expect(page).toHaveURL(/\/services\/board-maker#backlit$/);
+    await expect(page).toHaveURL(/\/services\/board-maker$/);
     // Conversation is kept while browsing
     await page.getByRole("button", { name: "Open chat assistant" }).click();
     await expect(page.getByTestId("chat-question")).toContainText("Do you make backlit boards?");
@@ -246,10 +273,20 @@ test.describe("AI chat assistant", () => {
 test.describe("navigation", () => {
   const pages = [
     ["Home", /\/$/],
+    ["Products", /\/products$/],
     ["Services", /\/services$/],
     ["About Us", /\/about$/],
     ["Contact Us", /\/contact$/],
+    ["Earn with us", /\/affiliate$/],
   ] as const;
+
+  test("the header shows exactly the six main pages", async ({ page, isMobile }) => {
+    await page.goto("/");
+    const nav = isMobile ? page.getByRole("navigation", { name: "Mobile" }) : page.getByRole("navigation", { name: "Main" });
+    if (isMobile) await page.getByRole("button", { name: "Open menu" }).click();
+    await expect(nav.getByRole("link")).toHaveText(pages.map(([label]) => label));
+    await expect(page.locator("header").getByRole("link", { name: /Business cards|Marketing/i })).toHaveCount(0);
+  });
 
   test("header links on desktop", async ({ page, isMobile }) => {
     test.skip(isMobile, "Desktop header");

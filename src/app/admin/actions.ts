@@ -11,8 +11,12 @@ import {
   deleteCategory,
   deleteProduct,
   deleteProductImage,
+  moveCategory,
+  removeCategoryImage,
   reorderProductImages,
   saveCategory,
+  setCategoryImage,
+  setCategoryVisibility,
   saveProduct,
   updateProductImageAlt,
 } from "@/lib/admin/catalog-service";
@@ -121,8 +125,15 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
     name: formData.get("name"),
     slug: formData.get("slug"),
     description: formData.get("description") ?? "",
+    content: formData.get("content") ?? "",
     parentId: formData.get("parentId") ?? "",
     sortOrder: formData.get("sortOrder") || 0,
+    isVisible: formData.get("isVisible") === "on",
+    priceFrom: formData.get("priceFrom") ?? "",
+    priceUnit: formData.get("priceUnit") ?? "",
+    imageAlt: formData.get("imageAlt") ?? "",
+    seoTitle: formData.get("seoTitle") ?? "",
+    seoDescription: formData.get("seoDescription") ?? "",
   });
   if (!parsed.success) return { errors: issuesToErrors(parsed.error) };
   try {
@@ -138,6 +149,34 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
 export async function deleteCategoryAction(categoryId: string): Promise<AdminResult> {
   await requireAdmin();
   const result = await run(() => deleteCategory(id.parse(categoryId)));
+  if (!result.error) catalogChanged();
+  return result;
+}
+
+export async function categoryCommandAction(
+  categoryId: string,
+  command: "up" | "down" | "show" | "hide" | "remove-image",
+): Promise<AdminResult> {
+  await requireAdmin();
+  const target = id.parse(categoryId);
+  const result = await run(async () => {
+    const cmd = z.enum(["up", "down", "show", "hide", "remove-image"]).parse(command);
+    if (cmd === "up" || cmd === "down") await moveCategory(target, cmd);
+    else if (cmd === "remove-image") await removeCategoryImage(target);
+    else await setCategoryVisibility(target, cmd === "show");
+  });
+  if (!result.error) catalogChanged();
+  return result;
+}
+
+export async function uploadCategoryImageAction(formData: FormData): Promise<AdminResult> {
+  await requireAdmin();
+  const file = formData.get("image");
+  const result = await run(async () => {
+    if (!(file instanceof File) || file.size === 0) throw new AdminInputError("Choose an image to upload.");
+    const alt = formData.get("imageAlt");
+    await setCategoryImage(id.parse(formData.get("id")), new Uint8Array(await file.arrayBuffer()), typeof alt === "string" ? alt : undefined);
+  });
   if (!result.error) catalogChanged();
   return result;
 }

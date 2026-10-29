@@ -68,13 +68,13 @@ export async function categoryChoices() {
   const all = await listAdminCategories();
   const byParent = new Map<string | null, typeof all>();
   for (const c of all) byParent.set(c.parentId, [...(byParent.get(c.parentId) ?? []), c]);
-  const out: ((typeof all)[number] & { depth: number })[] = [];
-  const walk = (parentId: string | null, depth: number) => {
+  const out: ((typeof all)[number] & { depth: number; path: string[]; rootId: string })[] = [];
+  const walk = (parentId: string | null, depth: number, path: string[], rootId: string | null) => {
     for (const c of byParent.get(parentId) ?? []) {
-      out.push({ ...c, depth });
-      walk(c.id, depth + 1);
+      out.push({ ...c, depth, path: [...path, c.slug], rootId: rootId ?? c.id });
+      walk(c.id, depth + 1, [...path, c.slug], rootId ?? c.id);
     }
   };
-  walk(null, 0);
+  walk(null, 0, [], null);
   return out;
 }

@@ -10,6 +10,7 @@ An online printing store for the Pakistani market: product catalog with volume p
 | 1b | Catalog requirements (spec §4): admin dashboard for products, images and categories; subcategories, sorting, filters, SEO, SKUs, publication status, bulk discounts, per-order fees, affiliate %; change options in cart | ✅ Done |
 | 1c | Affiliate module: applications, referral links and click tracking, commissions, withdrawals to JazzCash / Easypaisa / bank, affiliate dashboard, admin review and payouts, program settings, home page promotion | ✅ Done (commissions start flowing once checkout is built) |
 | 1d | Website pages: new home sections, Services (category → sub-type → quality), About, Contact (DB + email), customer reviews, AI chat assistant, header + mobile menu | ✅ Done. See [docs/SITE-PAGES.md](docs/SITE-PAGES.md) |
+| 1e | Header cleanup; one shared category tree for Services and Products (Board Maker, Offset, Digital, Customized Printing) with clean URLs, admin images/prices/SEO; site-wide SEO (sitemap, robots, canonical, JSON-LD, Open Graph) | ✅ Done. See [docs/CATALOG-AND-SEO.md](docs/CATALOG-AND-SEO.md) |
 | 2 | Checkout, addresses, orders, order tracking, JazzCash / Easypaisa / COD / bank transfer payments | Planned |
 | 3 | Artwork uploads, custom design requests, proof approvals, real-time order chat | Planned |
 | 4 | Admin dashboard (products, orders, proofs), affiliate program, emails / SMS | Planned |
@@ -102,7 +103,7 @@ scripts/                 Helper scripts (placeholder image generator)
 
 - **Products:** SKU, slug, category, short and full description, base price, minimum quantity and step, production time, quantity price tiers, bulk discounts, options (size, material, finishing, other) whose values add a price per unit or once per order, availability, featured flag, SEO title and description, affiliate commission %, and publication status (draft, published, archived). A product needs at least one image to be published. Products that have been ordered are archived instead of deleted.
 - **Images:** upload several at once (JPG, PNG or WebP, up to 4 MB each, checked by file content), set the main image, reorder, edit descriptions, delete.
-- **Categories:** unlimited nesting (categories and subcategories), with loop prevention.
+- **Categories & Services:** one tree used by both the Services and Products pages, with unlimited nesting, images, starting prices or "Get Quote", show/hide, reorder and SEO fields. See [docs/CATALOG-AND-SEO.md](docs/CATALOG-AND-SEO.md).
 
 **First administrator on a new deployment:** set `ADMIN_EMAILS` to your email, then register with that email. It only works while there is no administrator yet, because emails are not verified at this stage. After that, remove the variable.
 
