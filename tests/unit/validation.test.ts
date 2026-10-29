@@ -45,3 +45,15 @@ describe("formatPKR", () => {
     expect(formatPKR(0)).toBe("PKR 0");
   });
 });
+
+import { quoteLink, whatsappLink, whatsappLinkTo } from "@/lib/business";
+
+describe("business links", () => {
+  it("builds WhatsApp and quote links", () => {
+    expect(whatsappLink()).toBe("https://wa.me/923034889255");
+    expect(whatsappLink("Hi there")).toBe("https://wa.me/923034889255?text=Hi%20there");
+    expect(whatsappLinkTo("0300-1234567")).toBe("https://wa.me/923001234567");
+    expect(whatsappLinkTo("042 1234567")).toBeNull();
+    expect(quoteLink("Board Maker / 3D")).toBe("/contact?subject=Quote%3A%20Board%20Maker%20%2F%203D");
+  });
+});

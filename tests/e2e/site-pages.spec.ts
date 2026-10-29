@@ -149,3 +149,44 @@ test.describe("about page", () => {
     await expect(page.getByRole("heading", { name: `Fast turnaround ${run}` })).toBeVisible();
   });
 });
+
+test.describe("contact page", () => {
+  test("shows contact details and map, and sends a quote request to the admin inbox", async ({ browser, isMobile }) => {
+    // A unique client IP per run keeps the contact form's rate limit from affecting repeated test runs.
+    const context = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": `10.9.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` } });
+    const page = await context.newPage();
+    const run = Date.now().toString(36);
+
+    await page.goto("/services/board-maker");
+    await page.getByRole("link", { name: "Get Quote for Board Maker / 3D", exact: true }).click();
+    await expect(page).toHaveURL(/\/contact\?subject=/);
+    await expect(page.getByLabel("Subject (optional)")).toHaveValue("Quote: Board Maker / 3D");
+
+    await expect(page.getByRole("link", { name: "+92 303 488 9255" }).first()).toHaveAttribute("href", "tel:+923034889255");
+    await expect(page.getByRole("link", { name: "mixprintdesigns@gmail.com" })).toHaveAttribute("href", "mailto:mixprintdesigns@gmail.com");
+    await expect(page.getByRole("link", { name: "facebook.com/mixprintdesign" })).toHaveAttribute("href", "https://facebook.com/mixprintdesign");
+    await expect(page.getByRole("link", { name: "Chat on WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/923034889255/);
+    await expect(page.getByTitle("Mix Print Design location on Google Maps")).toHaveAttribute("src", /google\.com\/maps\?q=.*Raiwind/);
+
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(page.getByText("Enter your name.")).toBeVisible();
+    await expect(page.getByText("Enter a valid email address.")).toBeVisible();
+
+    await page.getByLabel("Name", { exact: true }).fill(`Visitor ${run}`);
+    await page.getByLabel("Email", { exact: true }).fill(`visitor-${run}@example.com`);
+    await page.getByLabel("Phone / WhatsApp").fill("0300 1234567");
+    await page.getByLabel("Message", { exact: true }).fill("Please quote a 3D steel letter sign, 8 ft wide.");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(page.getByRole("status")).toContainText("Your message has been sent");
+
+    if (isMobile) return;
+    const admin = await adminPage(browser);
+    await admin.goto("/admin/messages");
+    const message = admin.getByTestId("contact-message").filter({ hasText: `Visitor ${run}` });
+    await expect(message).toContainText("Quote: Board Maker / 3D");
+    await expect(message).toContainText("Please quote a 3D steel letter sign");
+    await expect(message).toContainText("Not emailed"); // no email key in the test environment
+    await message.getByRole("button", { name: "Mark as handled" }).click();
+    await expect(message).toHaveCount(0);
+  });
+});

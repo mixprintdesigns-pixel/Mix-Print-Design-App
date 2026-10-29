@@ -7,6 +7,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { REVIEWS_TAG } from "@/lib/reviews/queries";
 import { deleteReview, moveReview, reviewSchema, saveReview } from "@/lib/reviews/admin";
 import type { ActionState } from "./affiliate-actions";
+import { setMessageHandled } from "@/lib/contact/service";
 import { aboutSchema, CONTENT_TAG, getAboutContent, saveAboutContent } from "@/lib/content/about";
 import { newKey, saveFile } from "@/lib/storage";
 import { checkImage } from "@/lib/storage/images";
@@ -167,4 +168,14 @@ export async function saveAboutAction(_prev: ActionState, data: FormData): Promi
   updateTag(CONTENT_TAG);
   refresh();
   return { message: "About page saved." };
+}
+
+// ─── Contact messages ────────────────────────────────────────────────────────
+
+export async function setMessageHandledAction(_prev: ActionState, data: FormData): Promise<ActionState> {
+  await requireStaff(["ADMIN", "STAFF"]);
+  const handled = data.get("handled") === "1";
+  await setMessageHandled(id.parse(data.get("id")), handled);
+  refresh();
+  return { message: handled ? "Marked as handled." : "Marked as open." };
 }

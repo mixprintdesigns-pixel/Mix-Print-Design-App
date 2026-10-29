@@ -17,6 +17,13 @@ export function whatsappLink(message?: string): string {
   return message ? `${base}?text=${encodeURIComponent(message)}` : base;
 }
 
+/** WhatsApp link to a customer's Pakistani mobile number, or null if the number is not a mobile. */
+export function whatsappLinkTo(phone: string): string | null {
+  const digits = phone.replace(/[\s-]/g, "");
+  const match = /^(?:\+92|0092|92|0)(3\d{9})$/.exec(digits);
+  return match ? `https://wa.me/92${match[1]}` : null;
+}
+
 /** Contact page link that pre-fills the quote subject. */
 export function quoteLink(subject?: string): string {
   return subject ? `/contact?subject=${encodeURIComponent(`Quote: ${subject}`)}` : "/contact?subject=Quote";
