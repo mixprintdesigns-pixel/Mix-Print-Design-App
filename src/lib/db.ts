@@ -1,13 +1,14 @@
 import "server-only";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
+import { resolveDatabaseUrl } from "./database-url";
 
 // Reuse one client per process; Next.js dev hot reload would otherwise open new pools.
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function getClient(): PrismaClient {
   if (globalForPrisma.prisma) return globalForPrisma.prisma;
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = resolveDatabaseUrl();
   if (!connectionString) {
     throw new Error(
       "DATABASE_URL is not set. Locally, add it to .env. On Vercel, add it under Project → Settings → Environment Variables (for Production, Preview and the build), then redeploy.",

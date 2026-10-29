@@ -95,10 +95,9 @@ scripts/                 Helper scripts (placeholder image generator)
 
 The app needs a PostgreSQL database at build time as well as at runtime. The catalog pages are prerendered from the database.
 
-1. Create a PostgreSQL database, for example from Vercel → **Storage** → **Neon** (or Supabase / Prisma Postgres). Use the **pooled** connection string.
-2. In Vercel → Project → **Settings → Environment Variables**, add:
-   - `DATABASE_URL`: the connection string (tick Production and Preview)
-   - `SEED_DEMO_DATA` = `true`: optional, loads the demo catalog. Remove it after the first deploy, or later deploys will reset seeded products to the demo data.
-3. Redeploy. Vercel runs `npm run vercel-build` (`scripts/vercel-build.sh`), which applies database migrations (`prisma migrate deploy`), optionally seeds, then runs `next build`.
+1. In Vercel → your project → **Storage**, create or connect a Postgres database (for example **Neon**, free plan). Connect it to Production and Preview.
+2. Check **Settings → Environment Variables**. The app reads the first of these that is set: `DATABASE_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL`.
+3. Optional: add `SEED_DEMO_DATA` = `true` to load the demo catalog. Remove it after the first successful deploy, or later deploys will reset seeded products to the demo data.
+4. Deploy **from the latest commit**. Pushing to `main` does this, or use Deployments → Create Deployment → `main`. Redeploying an older deployment rebuilds that older code.
 
-The development admin account is never created in production builds.
+`npm run build` runs `scripts/build.sh`. On Vercel (`VERCEL=1`) it applies migrations (`prisma migrate deploy`), optionally seeds, then runs `next build`. Locally it only runs `next build`. The development admin account is never created in production builds.
