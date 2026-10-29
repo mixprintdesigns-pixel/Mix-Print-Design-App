@@ -7,6 +7,9 @@ import { requireStaff } from "@/lib/auth/session";
 import { REVIEWS_TAG } from "@/lib/reviews/queries";
 import { deleteReview, moveReview, reviewSchema, saveReview } from "@/lib/reviews/admin";
 import type { ActionState } from "./affiliate-actions";
+import { aboutSchema, CONTENT_TAG, getAboutContent, saveAboutContent } from "@/lib/content/about";
+import { newKey, saveFile } from "@/lib/storage";
+import { checkImage } from "@/lib/storage/images";
 import { SERVICES_TAG } from "@/lib/services/queries";
 import {
   deleteLevel,
@@ -129,4 +132,39 @@ export async function unlinkServiceProductAction(_prev: ActionState, data: FormD
     updateTag("catalog");
     return "Product unlinked.";
   });
+}
+
+// ─── About page ──────────────────────────────────────────────────────────────
+
+export async function saveAboutAction(_prev: ActionState, data: FormData): Promise<ActionState> {
+  await requireStaff(["ADMIN"]);
+  const current = await getAboutContent();
+  let ownerPhotoUrl = data.get("removePhoto") === "on" ? "" : current.ownerPhotoUrl;
+
+  const photo = data.get("ownerPhoto");
+  if (photo instanceof File && photo.size > 0) {
+    const bytes = new Uint8Array(await photo.arrayBuffer());
+    const check = checkImage(bytes);
+    if (!check.ok) return { error: check.error };
+    ownerPhotoUrl = (await saveFile(newKey("about", check.ext), bytes, check.type)).url;
+  }
+
+  const titles = data.getAll("highlightTitle").map(String);
+  const texts = data.getAll("highlightText").map(String);
+  const parsed = aboutSchema.safeParse({
+    story: data.get("story"),
+    mission: data.get("mission"),
+    ownerName: data.get("ownerName"),
+    ownerTitle: data.get("ownerTitle") ?? "",
+    ownerBio: data.get("ownerBio") ?? "",
+    ownerPhotoUrl,
+    highlights: titles
+      .map((title, i) => ({ title: title.trim(), text: (texts[i] ?? "").trim() }))
+      .filter((h) => h.title || h.text),
+  });
+  if (!parsed.success) return { error: firstIssue(parsed.error) };
+  await saveAboutContent(parsed.data);
+  updateTag(CONTENT_TAG);
+  refresh();
+  return { message: "About page saved." };
 }

@@ -125,3 +125,27 @@ test.describe("services", () => {
     await expect(digital.getByTestId("linked-product").filter({ hasText: "Vinyl Flex Banner" }).first()).toBeVisible();
   });
 });
+
+test.describe("about page", () => {
+  test("shows placeholder content and updates from admin", async ({ page, browser, isMobile }) => {
+    await page.goto("/about");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Lahore");
+    await expect(page.getByText("Raiwind Road, Lahore, Pakistan").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Why choose us" })).toBeVisible();
+    test.skip(isMobile, "Admin part runs on desktop");
+
+    const run = Date.now().toString(36);
+    const admin = await adminPage(browser);
+    await admin.goto("/admin/about");
+    await admin.getByLabel("Owner name").fill(`Owner ${run}`);
+    await admin.getByLabel("Short bio").fill("Twenty years of printing experience in Lahore.");
+    await admin.getByLabel("Highlight 1 title").fill(`Fast turnaround ${run}`);
+    await admin.getByRole("button", { name: "Save About page" }).click();
+    await expect(admin.getByText("About page saved.")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole("heading", { name: `Owner ${run}` })).toBeVisible();
+    await expect(page.getByText("Twenty years of printing experience in Lahore.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Fast turnaround ${run}` })).toBeVisible();
+  });
+});
