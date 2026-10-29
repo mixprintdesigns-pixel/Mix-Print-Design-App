@@ -1,10 +1,17 @@
 import Link from "next/link";
 import { ProductCard } from "@/components/product-card";
 import { getCategoryTree, getFeaturedProducts } from "@/lib/catalog/queries";
+import { getPublicProgramTerms } from "@/lib/affiliate/public";
+import { formatPKR } from "@/lib/money";
+import { formatPercent } from "@/lib/pricing";
 
 // Catalog data is cached ("use cache"), so this whole page prerenders into the static shell.
 export default async function HomePage() {
-  const [categories, featured] = await Promise.all([getCategoryTree(), getFeaturedProducts()]);
+  const [categories, featured, affiliate] = await Promise.all([
+    getCategoryTree(),
+    getFeaturedProducts(),
+    getPublicProgramTerms(),
+  ]);
 
   return (
     <>
@@ -67,6 +74,45 @@ export default async function HomePage() {
           {featured.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 pt-12" aria-labelledby="affiliate-heading">
+        <div className="card grid gap-6 overflow-hidden bg-gradient-to-br from-brand/10 via-surface to-accent/10 p-8 md:grid-cols-[1.4fr_1fr] md:items-center">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-widest text-accent">Affiliate program</p>
+            <h2 id="affiliate-heading" className="mt-2 text-3xl font-extrabold tracking-tight">
+              Share MixPrint. Earn <span className="text-brand">{formatPercent(affiliate.defaultRateBps)}</span> on every order.
+            </h2>
+            <p className="mt-3 text-muted">
+              Designers, influencers and community admins earn commission when people they refer order printing from MixPrint.
+              Paid out to JazzCash, Easypaisa or your bank.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link href="/affiliate/join" className="btn-primary">
+                Become an affiliate
+              </Link>
+              <Link href="/affiliate" className="btn-secondary">
+                How it works
+              </Link>
+            </div>
+          </div>
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            {[
+              [formatPercent(affiliate.defaultRateBps), "commission on product value"],
+              [`${affiliate.cookieDays} days`, "referral window"],
+              [formatPKR(affiliate.minWithdrawalMinor), "minimum payout"],
+              ["3 ways", "JazzCash, Easypaisa, bank"],
+            ].map(([value, label]) => (
+              <div key={label} className="rounded-lg bg-surface/80 p-4">
+                <dt className="sr-only">{label}</dt>
+                <dd>
+                  <span className="block text-2xl font-black text-brand">{value}</span>
+                  <span className="text-muted">{label}</span>
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
     </>

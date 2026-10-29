@@ -488,32 +488,65 @@ model Message {
 // ─── Affiliate marketing ──────────────────────────────────────────────────────
 
 enum AffiliateStatus {
-  PENDING
-  APPROVED
-  SUSPENDED
+  PENDING // applied, waiting for review
+  APPROVED // can earn commission
+  REJECTED
+  SUSPENDED // links stop earning; existing balance is kept
+}
+
+enum PayoutMethod {
+  JAZZCASH
+  EASYPAISA
+  BANK_TRANSFER
 }
 
 enum CommissionStatus {
-  PENDING // order not yet delivered / inside refund window
-  APPROVED
+  PENDING // order placed; not yet delivered / inside the refund window
+  APPROVED // earned, can be withdrawn
+  PAID // included in a paid withdrawal
+  REVERSED // order cancelled or refunded
+}
+
+enum WithdrawalStatus {
+  REQUESTED
   PAID
-  REVERSED
+  REJECTED
+}
+
+// Single row (id = 1) holding the program rules administrators can change.
+model AffiliateSettings {
+  id                 Int      @id @default(1)
+  defaultRateBps     Int      @default(500) // 5% when neither product nor affiliate sets a rate
+  cookieDays         Int      @default(30) // how long a referral click is remembered
+  minWithdrawalMinor Int      @default(100000) // PKR 1,000
+  holdDays           Int      @default(7) // days after delivery before commission is approved
+  autoApprove        Boolean  @default(false) // approve new affiliates without review
+  updatedAt          DateTime @updatedAt
 }
 
 model Affiliate {
-  id                String           @id @default(cuid())
-  userId            String           @unique
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  code              String           @unique
-  status            AffiliateStatus  @default(PENDING)
-  commissionRateBps Int              @default(500) // 500 bps = 5%
-  payoutMethod      PaymentProvider? // JAZZCASH / EASYPAISA / BANK_TRANSFER
-  payoutAccount     String?
-  createdAt         DateTime         @default(now())
+  id                String          @id @default(cuid())
+  userId            String          @unique
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code              String          @unique // used in referral links: /r/CODE
+  status            AffiliateStatus @default(PENDING)
+  commissionRateBps Int? // custom rate for this affiliate; null = program default
+  payoutMethod      PayoutMethod?
+  payoutAccount     String? // mobile wallet number or IBAN
+  payoutAccountName String? // account title
+  website           String? // website or social profile used for promotion
+  promotionPlan     String? // how the applicant will promote MixPrint
+  adminNote         String? // shown to the affiliate when rejected or suspended
+  approvedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @default(now()) @updatedAt
 
   clicks      AffiliateClick[]
   commissions AffiliateCommission[]
+  withdrawals AffiliateWithdrawal[]
   orders      Order[]
+
+  @@index([status])
 }
 
 model AffiliateClick {
@@ -521,20 +554,50 @@ model AffiliateClick {
   affiliateId String
   affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
   landingPath String
-  ipHash      String? // hashed, never the raw IP
+  referrer    String?
+  ipHash      String? // keyed hash, never the raw IP
   createdAt   DateTime  @default(now())
 
   @@index([affiliateId, createdAt])
+  @@index([affiliateId, ipHash, createdAt])
 }
 
 model AffiliateCommission {
-  id          String           @id @default(cuid())
-  affiliateId String
-  affiliate   Affiliate        @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  orderId     String           @unique
-  order       Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  amountMinor Int
-  status      CommissionStatus @default(PENDING)
-  createdAt   DateTime         @default(now())
-  paidAt      DateTime?
+  id              String               @id @default(cuid())
+  affiliateId     String
+  affiliate       Affiliate            @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  orderId         String               @unique
+  order           Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  baseAmountMinor Int // order item totals the commission was calculated on
+  amountMinor     Int
+  breakdown       Json // per item: product, base, rate
+  status          CommissionStatus     @default(PENDING)
+  note            String?
+  withdrawalId    String?
+  withdrawal      AffiliateWithdrawal? @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
+  createdAt       DateTime             @default(now())
+  approvedAt      DateTime?
+  reversedAt      DateTime?
+  paidAt          DateTime?
+
+  @@index([affiliateId, status])
+}
+
+model AffiliateWithdrawal {
+  id             String                @id @default(cuid())
+  affiliateId    String
+  affiliate      Affiliate             @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  amountMinor    Int
+  method         PayoutMethod
+  account        String
+  accountName    String
+  status         WithdrawalStatus      @default(REQUESTED)
+  transactionRef String? // JazzCash / Easypaisa / bank reference entered by the admin
+  adminNote      String?
+  requestedAt    DateTime              @default(now())
+  processedAt    DateTime?
+  commissions    AffiliateCommission[]
+
+  @@index([affiliateId, requestedAt])
+  @@index([status])
 }

@@ -21,11 +21,11 @@ async function AccountOverview() {
     <>
       <h1 className="text-3xl font-bold">My account</h1>
       <p className="mt-1 text-muted">Signed in as {user.email}</p>
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2">
         {[
           ["Orders", "Track orders, approve proofs and chat with our team.", "Coming in stage 2"],
           ["Design requests", "Brief our designers and review their proofs.", "Coming in stage 3"],
-          ["Affiliate program", "Earn commission by referring customers.", "Coming in stage 4"],
+
         ].map(([title, text, note]) => (
           <div key={title} className="card p-5">
             <p className="font-semibold">{title}</p>
@@ -33,6 +33,20 @@ async function AccountOverview() {
             <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-accent">{note}</p>
           </div>
         ))}
+      </div>
+      <div className="card mt-6 flex flex-wrap items-center justify-between gap-4 p-5">
+        <div>
+          <p className="font-semibold">Affiliate program</p>
+          <p className="text-sm text-muted">Earn commission by referring customers to MixPrint.</p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/affiliate/dashboard" className="btn-secondary">
+            Affiliate dashboard
+          </Link>
+          <Link href="/affiliate/join" className="btn-primary">
+            Join
+          </Link>
+        </div>
       </div>
       <Link href="/cart" className="btn-secondary mt-8">
         View cart

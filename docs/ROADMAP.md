@@ -18,6 +18,16 @@
 - Cart: change a line's options (merges with an identical line)
 - Image storage on local disk (development) or Vercel Blob (production)
 
+## Stage 1c: Affiliate module ✅
+
+- Public program page, home page section, header and footer links
+- Application with JazzCash / Easypaisa / IBAN payout details; admin approve, reject, suspend, custom rates
+- Referral links (`/r/CODE`, product links), click tracking with de-duplication, 30-day cookie
+- Commission engine (product → affiliate → default rate), reversal on cancel/refund, approval after hold period
+- Affiliate dashboard: links, clicks, orders, conversion, sales, balances, commissions, withdrawals, payout details
+- Admin: affiliates, commissions, withdrawals (mark paid with reference / reject), program settings
+- Waiting on checkout (stage 2) to create commissions from real orders. See docs/AFFILIATES.md
+
 ## Stage 2: Checkout, orders and payments
 
 - Address book (Pakistani provinces and cities), delivery charges by city
@@ -37,7 +47,6 @@
 
 - Admin dashboard: products (images, options, tiers), orders, status updates, proofs, payments
 - Role-based access (`STAFF`, `ADMIN`) enforced in every action
-- Affiliate program: referral links and cookies, click tracking, commission on delivered orders, payouts to JazzCash / Easypaisa
 - Email verification, password reset, SMS/WhatsApp notifications
 - SEO (sitemap, structured data), analytics, Urdu localisation
 - Production deployment (Vercel / Railway / VPS) with a managed PostgreSQL database and backups

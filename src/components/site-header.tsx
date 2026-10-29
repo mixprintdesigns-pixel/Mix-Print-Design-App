@@ -15,11 +15,14 @@ export function SiteHeader() {
           <Link href="/products" className="hover:text-foreground">
             Products
           </Link>
-          <Link href="/products?category=business-cards" className="hidden hover:text-foreground sm:inline">
+          <Link href="/products?category=business-cards" className="hidden hover:text-foreground md:inline">
             Business cards
           </Link>
-          <Link href="/products?category=marketing" className="hidden hover:text-foreground sm:inline">
+          <Link href="/products?category=marketing" className="hidden hover:text-foreground md:inline">
             Marketing
+          </Link>
+          <Link href="/affiliate" className="hover:text-foreground">
+            Earn with us
           </Link>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm">
