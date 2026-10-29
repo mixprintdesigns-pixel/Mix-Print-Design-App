@@ -77,12 +77,20 @@ test.describe("services", () => {
     for (const title of ["Board Maker", "Offset Printing", "Digital Printing", "Customized Printing"]) {
       await expect(page.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible();
     }
-    const board = page.getByTestId("main-service").filter({ has: page.getByRole("heading", { level: 2, name: "Board Maker" }) });
-    await expect(board.getByRole("heading", { level: 3 })).toHaveText(["Backlit Sign Board", "Front-lit Sign Board", "3D Sign Board"]);
+    // Only the main services: deeper levels are never listed on a parent page.
+    await expect(page.getByTestId("category-card")).toHaveCount(4);
+    await expect(page.getByText("Backlit Sign Board")).toHaveCount(0);
 
-    await board.getByRole("link", { name: "3D Sign Board", exact: true }).click();
+    await page.getByRole("link", { name: "Board Maker", exact: true }).click();
+    await expect(page).toHaveURL(/\/services\/board-maker$/);
+    const categories = page.getByRole("region", { name: "Board Maker types" });
+    await expect(categories.getByRole("heading", { level: 3 })).toHaveText(["Backlit Sign Board", "Front-lit Sign Board", "3D Sign Board"]);
+    await expect(page.getByRole("link", { name: "← Back to all services" })).toHaveAttribute("href", "/services");
+
+    await categories.getByRole("link", { name: "3D Sign Board", exact: true }).click();
     await expect(page).toHaveURL(/\/services\/board-maker\/3d-sign-board$/);
     await expect(page.getByRole("heading", { level: 1, name: "3D Sign Board" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "← Back to Board Maker" })).toHaveAttribute("href", "/services/board-maker");
     await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Services/Board Maker/3D Sign Board");
     const types = page.getByRole("region", { name: "3D Sign Board types" });
     await expect(types.getByRole("heading", { level: 3 })).toHaveText([

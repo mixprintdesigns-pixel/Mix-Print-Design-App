@@ -16,8 +16,6 @@ import { absoluteUrl, seoMetadata } from "@/lib/seo";
 
 type Params = PageProps<"/services/[...path]">["params"];
 
-const PRODUCTS_SHOWN = 6;
-
 export async function generateStaticParams() {
   const { categories } = await getCatalogPaths();
   // Cache Components needs at least one entry to validate the route; an unknown path renders the 404 page.
@@ -78,7 +76,10 @@ function serviceJsonLd(node: CategoryNode, chain: CategoryNode[]) {
 async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: CategoryNode }) {
   const chain = ancestry(tree, node);
   const subject = chain.map((c) => c.name).join(" / ");
-  const products = await listProducts({ categoryId: node.id });
+  // One level at a time: this page lists its direct sub-categories and the products assigned to it,
+  // never anything deeper.
+  const products = await listProducts({ categoryId: node.id, directOnly: true });
+  const parent = chain.at(-2);
   const related = siblings(tree, node).slice(0, 6);
 
   return (
@@ -88,6 +89,9 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-2 md:items-center">
           <div>
             <Breadcrumbs items={[{ name: "Services", href: "/services" }, ...chain.map((c) => ({ name: c.name, href: serviceUrl(c.path) }))]} />
+            <Link href={parent ? serviceUrl(parent.path) : "/services"} className="mt-2 inline-block text-sm font-semibold text-brand">
+              ← Back to {parent ? parent.name : "all services"}
+            </Link>
             <h1 className="mt-3 text-4xl font-extrabold tracking-tight">{node.name}</h1>
             {node.description && <p className="mt-3 text-lg text-muted">{node.description}</p>}
             <p className="mt-3">
@@ -124,11 +128,11 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
                 {node.name} products
               </h2>
               <Link href={categoryUrl(node.path)} className="text-sm font-semibold text-brand">
-                View all {products.length} in Products →
+                View in Products →
               </Link>
             </div>
             <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {products.slice(0, PRODUCTS_SHOWN).map((p) => (
+              {products.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>

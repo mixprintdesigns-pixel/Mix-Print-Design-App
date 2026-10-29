@@ -108,8 +108,10 @@ export const SORTS = {
 export type SortKey = keyof typeof SORTS;
 
 export type ProductFilter = {
-  /** Category id; products in all its sub-categories are included. */
+  /** Category id; products in all its sub-categories are included unless `directOnly` is set. */
   categoryId?: string;
+  /** Only products assigned to the category itself (the Services pages show one level at a time). */
+  directOnly?: boolean;
   q?: string;
   sort?: SortKey;
   /** Only products ready within this many working days. */
@@ -139,7 +141,7 @@ export async function listProducts(filter: ProductFilter): Promise<ProductCard[]
   if (filter.categoryId) {
     const node = findById(tree, filter.categoryId);
     if (!node) return [];
-    categoryIds = descendantIds(node);
+    categoryIds = filter.directOnly ? [node.id] : descendantIds(node);
   }
 
   const q = filter.q;
