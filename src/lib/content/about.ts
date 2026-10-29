@@ -37,13 +37,18 @@ export const DEFAULT_ABOUT: AboutContent = {
   ],
 };
 
+/** Uncached read, for code that runs outside page rendering (e.g. the AI assistant's index). */
+export async function readAboutContent(): Promise<AboutContent> {
+  const row = await prisma.siteContent.findUnique({ where: { key: "about" } });
+  const parsed = aboutSchema.safeParse(row?.value);
+  return parsed.success ? parsed.data : DEFAULT_ABOUT;
+}
+
 export async function getAboutContent(): Promise<AboutContent> {
   "use cache";
   cacheTag(CONTENT_TAG);
   cacheLife("hours");
-  const row = await prisma.siteContent.findUnique({ where: { key: "about" } });
-  const parsed = aboutSchema.safeParse(row?.value);
-  return parsed.success ? parsed.data : DEFAULT_ABOUT;
+  return readAboutContent();
 }
 
 export async function saveAboutContent(content: AboutContent): Promise<void> {

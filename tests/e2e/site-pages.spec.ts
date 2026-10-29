@@ -190,3 +190,55 @@ test.describe("contact page", () => {
     await expect(message).toHaveCount(0);
   });
 });
+
+test.describe("AI chat assistant", () => {
+  test("is on every page and answers from site content with links", async ({ browser }) => {
+    const context = await browser.newContext({
+      ...(test.info().project.use ?? {}),
+      extraHTTPHeaders: { "x-forwarded-for": `10.8.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` },
+    });
+    const page = await context.newPage();
+    for (const path of ["/", "/services", "/about", "/contact", "/products"]) {
+      await page.goto(path);
+      await expect(page.getByRole("button", { name: "Open chat assistant" })).toBeVisible();
+    }
+
+    await page.getByRole("button", { name: "Open chat assistant" }).click();
+    const chat = page.getByRole("dialog", { name: "Mix Print Design assistant" });
+    await expect(chat).toBeVisible();
+    await expect(chat.getByTestId("chat-answer").first()).toContainText("Mix Print Design assistant");
+    await expect(chat.getByRole("link", { name: /WhatsApp/ })).toHaveAttribute("href", "https://wa.me/923034889255");
+
+    await chat.getByRole("button", { name: "Do you make backlit boards?" }).click();
+    const answer = chat.getByTestId("chat-answer").nth(1);
+    await expect(answer).toContainText("Backlit");
+    const link = answer.getByRole("link", { name: "Board Maker: Backlit" });
+    await expect(link).toHaveAttribute("href", "/services/board-maker#backlit");
+
+    // The chat panel must fit inside a phone screen
+    const box = await chat.boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+
+    await link.click();
+    await expect(page).toHaveURL(/\/services\/board-maker#backlit$/);
+    // Conversation is kept while browsing
+    await page.getByRole("button", { name: "Open chat assistant" }).click();
+    await expect(page.getByTestId("chat-question")).toContainText("Do you make backlit boards?");
+
+    await page.getByLabel("Your question").fill("affiliate commission withdrawal");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(page.getByTestId("chat-answer").last().getByRole("link", { name: "Affiliate program" })).toHaveAttribute("href", "/affiliate");
+  });
+
+  test("the chat API validates input and keeps keys server-side", async ({ request }) => {
+    const bad = await request.post("/api/chat", { data: { message: "" } });
+    expect(bad.status()).toBe(400);
+    const ok = await request.post("/api/chat", { data: { message: "business cards", history: [] }, headers: { "x-forwarded-for": `10.7.${Date.now() % 250}.1` } });
+    expect(ok.status()).toBe(200);
+    const body = await ok.json();
+    expect(body).toHaveProperty("answer");
+    expect(JSON.stringify(body)).not.toMatch(/sk-ant|ANTHROPIC/);
+  });
+});
