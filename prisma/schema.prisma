@@ -26,21 +26,23 @@ model User {
   passwordHash     String
   role             Role      @default(CUSTOMER)
   emailVerifiedAt  DateTime?
+  phoneVerifiedAt  DateTime? // set when the mobile number is confirmed by SMS code
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  sessions       Session[]
-  addresses      Address[]
-  cart           Cart?
-  orders         Order[]
-  designRequests DesignRequest[]
-  messages       Message[]
-  files          FileAsset[]
-  affiliate      Affiliate?
-  statusEvents   OrderStatusEvent[]
-  proofsCreated  Proof[]            @relation("ProofCreatedBy")
+  sessions         Session[]
+  affiliateSignups AffiliateSignup[]
+  addresses        Address[]
+  cart             Cart?
+  orders           Order[]
+  designRequests   DesignRequest[]
+  messages         Message[]
+  files            FileAsset[]
+  affiliate        Affiliate?
+  statusEvents     OrderStatusEvent[]
+  proofsCreated    Proof[]            @relation("ProofCreatedBy")
 }
 
 model Session {
@@ -726,4 +728,47 @@ model RateLimitHit {
   createdAt DateTime @default(now())
 
   @@index([key, createdAt])
+}
+
+// ─── Affiliate signup verification (email + SMS codes) ───────────────────────
+
+// A pending affiliate signup. For new visitors no User exists until both codes are verified;
+// for signed-in customers (userId set) the affiliate application waits for verification.
+// Codes are stored only as keyed hashes.
+model AffiliateSignup {
+  id        String  @id @default(cuid())
+  tokenHash String  @unique // SHA-256 of the httpOnly cookie that ties this signup to the browser
+  userId    String? // existing account joining the program
+  user      User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name         String
+  email        String // lower-cased
+  phone        String // E.164, +923xxxxxxxxx
+  passwordHash String? // new accounts only
+
+  // Affiliate application, submitted once verification succeeds
+  payoutMethod      PayoutMethod
+  payoutAccount     String
+  payoutAccountName String
+  website           String?
+  promotionPlan     String
+
+  emailCodeHash      String?
+  emailCodeExpiresAt DateTime?
+  emailAttempts      Int       @default(0)
+  emailLastSentAt    DateTime?
+  emailVerifiedAt    DateTime?
+
+  phoneCodeHash      String?
+  phoneCodeExpiresAt DateTime?
+  phoneAttempts      Int       @default(0)
+  phoneLastSentAt    DateTime?
+  phoneVerifiedAt    DateTime?
+
+  completedAt DateTime?
+  expiresAt   DateTime // the whole pending signup is discarded after this
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
+  @@index([phone])
 }

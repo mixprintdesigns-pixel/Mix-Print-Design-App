@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { JoinForm } from "@/components/affiliate/join-form";
-import { requireUser } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getAffiliateForUser, getUserPhone } from "@/lib/affiliate/service";
 
 export const metadata: Metadata = { title: "Join the affiliate program", robots: { index: false } };
@@ -22,7 +23,22 @@ export default function JoinPage() {
 }
 
 async function Join() {
-  const user = await requireUser("/affiliate/join");
+  const user = await getCurrentUser();
+  if (!user) {
+    // New visitors create their account here; it is activated only after email + SMS verification.
+    return (
+      <>
+        <p className="mb-5 text-sm text-muted">
+          Already have a Mix Print account?{" "}
+          <Link href="/login?next=/affiliate/join" className="font-semibold text-brand">
+            Sign in first
+          </Link>
+          .
+        </p>
+        <JoinForm phone={null} name="" reapplying={false} newAccount />
+      </>
+    );
+  }
   const affiliate = await getAffiliateForUser(user.id);
   if (affiliate && affiliate.status !== "REJECTED") redirect("/affiliate/dashboard");
   return (

@@ -1,13 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { latestCode, randomMobile } from "./support/outbox";
 
 const E2E_DATABASE_URL = process.env.E2E_DATABASE_URL ?? "postgresql://mixprint:mixprint_dev@127.0.0.1:5432/mixprint_e2e";
 
-async function register(page: Page, name: string, email: string) {
+async function register(page: Page, name: string, email: string, mobile = randomMobile().local) {
   await page.goto("/register");
   await page.getByLabel("Full name").fill(name);
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel(/Mobile number/).fill("0321 7654321");
+  await page.getByLabel(/Mobile number/).fill(mobile);
   await page.getByLabel("Password").fill("MixPrint2026!");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/account$/);
@@ -52,18 +53,24 @@ test.describe("affiliate journey", () => {
     const affiliateEmail = `affiliate-${run}@example.com`;
     const buyerEmail = `buyer-${run}@example.com`;
 
-    // 1. Apply
-    await register(page, "Sana Malik", affiliateEmail);
+    // 1. Apply (signed-in customer) and verify email + mobile
+    const mobile = randomMobile();
+    await register(page, "Sana Malik", affiliateEmail, mobile.local);
     await page.goto("/affiliate");
     await page.getByRole("link", { name: "Join for free" }).first().click();
     await expect(page).toHaveURL(/\/affiliate\/join$/);
-    await expect(page.getByLabel("Wallet mobile number")).toHaveValue("03217654321");
+    await expect(page.getByLabel("Mobile number (Pakistan)")).toHaveValue(mobile.local);
+    await expect(page.getByLabel("Wallet mobile number")).toHaveValue(mobile.local);
     await page.getByRole("button", { name: "Submit application" }).click();
     await expect(page.getByText("Tell us briefly how you will promote")).toBeVisible();
     await expect(page.getByText("You must accept the affiliate terms.")).toBeVisible();
     await page.getByLabel("How will you promote MixPrint?").fill("I run a Lahore small-business WhatsApp group.");
     await page.getByLabel(/I agree to the/).check();
     await page.getByRole("button", { name: "Submit application" }).click();
+    await expect(page).toHaveURL(/\/affiliate\/verify$/);
+    await page.getByLabel("Email code").fill(await latestCode("email", affiliateEmail));
+    await page.getByLabel("Mobile code (SMS)").fill(await latestCode("sms", mobile.e164));
+    await page.getByRole("button", { name: "Verify & activate" }).click();
     await expect(page).toHaveURL(/\/affiliate\/dashboard\?joined=1$/);
     await expect(page.getByTestId("affiliate-status")).toContainText("under review");
     await expect(page.getByTestId("referral-link")).toHaveCount(0);
@@ -115,7 +122,7 @@ test.describe("affiliate journey", () => {
     await admin.goto("/admin/affiliates/withdrawals?status=REQUESTED");
     const withdrawal = admin.getByTestId("withdrawal-row").filter({ hasText: affiliateEmail });
     await expect(withdrawal).toContainText("PKR 1,500");
-    await expect(withdrawal).toContainText("+923217654321");
+    await expect(withdrawal).toContainText(mobile.e164);
     admin.once("dialog", (d) => d.accept());
     await withdrawal.getByLabel("Transaction reference").fill(`JC-${run}`);
     await withdrawal.getByRole("button", { name: "Mark as paid" }).click();
@@ -140,5 +147,77 @@ test.describe("affiliate journey", () => {
     await register(page, "Nosy Customer", `nosy-${Date.now()}@example.com`);
     await page.goto("/admin/affiliates/withdrawals");
     await expect(page).toHaveURL(/\/$/);
+  });
+});
+
+test.describe("affiliate signup verification", () => {
+  test.skip(({ isMobile }) => isMobile, "Covered on desktop");
+
+  test("new visitor: account is activated only after both email and SMS codes", async ({ browser }) => {
+    const context = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": `10.6.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` } });
+    const page = await context.newPage();
+    const run = Date.now().toString(36);
+    const email = `new-aff-${run}@gmail.com`;
+    const mobile = randomMobile();
+
+    await page.goto("/affiliate/join");
+    await expect(page.getByRole("link", { name: "Sign in first" })).toBeVisible();
+    await page.getByLabel("Full name").fill("Hira Khan");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Mobile number (Pakistan)").fill("12345");
+    await page.getByLabel("Password").fill("MixPrint2026!");
+    await page.getByLabel("How will you promote MixPrint?").fill("TikTok videos about small businesses.");
+    await page.getByLabel(/I agree to the/).check();
+    await page.getByRole("button", { name: "Create account & send codes" }).click();
+    await expect(page.getByText("Enter a valid mobile number")).toBeVisible();
+
+    await page.getByLabel("Mobile number (Pakistan)").fill(mobile.local);
+    await page.getByLabel("Wallet mobile number").fill(mobile.local);
+    await page.getByRole("button", { name: "Create account & send codes" }).click();
+    await expect(page).toHaveURL(/\/affiliate\/verify$/);
+    await expect(page.getByText(/We sent two 6-digit codes/)).toBeVisible();
+    await expect(page.getByText(`Sent to ${mobile.e164.slice(0, 4)}******${mobile.e164.slice(-3)}`)).toBeVisible();
+    // Not signed in and no account yet
+    await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+
+    // Resend waits 60 seconds
+    await expect(page.getByRole("button", { name: /Resend code in \d+s/ }).first()).toBeDisabled();
+
+    const emailCode = await latestCode("email", email);
+    const smsCode = await latestCode("sms", mobile.e164);
+    const wrong = smsCode === "000000" ? "111111" : "000000";
+    await page.getByLabel("Email code").fill(emailCode);
+    await page.getByLabel("Mobile code (SMS)").fill(wrong);
+    await page.getByRole("button", { name: "Verify & activate" }).click();
+    await expect(page.getByText("That code is not correct. 4 tries left.")).toBeVisible();
+    await expect(page.getByText("✓ Verified")).toBeVisible(); // email accepted
+
+    await page.getByLabel("Mobile code (SMS)").fill(smsCode);
+    await page.getByRole("button", { name: "Verify & activate" }).click();
+    await expect(page).toHaveURL(/\/affiliate\/dashboard\?joined=1$/);
+    await expect(page.getByText("Thanks for applying!")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Hi, Hira/ })).toBeVisible();
+
+    // The same email or mobile cannot be used again
+    const other = await (await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": `10.5.${Math.floor(Math.random() * 250)}.1` } })).newPage();
+    await other.goto("/affiliate/join");
+    await other.getByLabel("Full name").fill("Copy Cat");
+    await other.getByLabel("Email").fill(`copy-${run}@gmail.com`);
+    await other.getByLabel("Mobile number (Pakistan)").fill(mobile.local);
+    await other.getByLabel("Password").fill("MixPrint2026!");
+    await other.getByLabel("Wallet mobile number").fill(mobile.local);
+    await other.getByLabel("How will you promote MixPrint?").fill("Facebook groups in Karachi.");
+    await other.getByLabel(/I agree to the/).check();
+    await other.getByRole("button", { name: "Create account & send codes" }).click();
+    await expect(other.getByText("This mobile number is already used by another account.")).toBeVisible();
+    await other.getByLabel("Email").fill(email);
+    await other.getByLabel("Mobile number (Pakistan)").fill(randomMobile().local);
+    await other.getByRole("button", { name: "Create account & send codes" }).click();
+    await expect(other.getByText(/This email is already registered/)).toBeVisible();
+  });
+
+  test("verification page without a pending signup", async ({ page }) => {
+    await page.goto("/affiliate/verify");
+    await expect(page.getByText("This verification link has expired or was already used.")).toBeVisible();
   });
 });

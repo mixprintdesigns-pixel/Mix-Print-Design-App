@@ -54,7 +54,7 @@ export function PayoutFields({
         </div>
         <div>
           <label htmlFor="payoutAccountName" className="label">
-            Account title
+            Account title <span className="font-normal text-muted">(if different from your name)</span>
           </label>
           <input id="payoutAccountName" name="payoutAccountName" className="input" defaultValue={defaults.payoutAccountName ?? ""} />
           {errors.payoutAccountName && <p className="field-error">{errors.payoutAccountName}</p>}

@@ -25,6 +25,7 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     timeout: 300_000,
     reuseExistingServer: false,
-    env: { DATABASE_URL: E2E_DATABASE_URL, APP_URL: `http://localhost:${PORT}` },
+    // OTP_DEV_OUTBOX: verification codes are written to storage/dev-outbox.jsonl for tests to read.
+    env: { DATABASE_URL: E2E_DATABASE_URL, APP_URL: `http://localhost:${PORT}`, OTP_DEV_OUTBOX: "true" },
   },
 });
