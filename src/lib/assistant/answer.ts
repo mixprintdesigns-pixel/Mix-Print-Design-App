@@ -34,6 +34,13 @@ function formatContext(hits: SearchHit[]): string {
   return ["SITE CONTENT (from mixprint website):", ...hits.map((h, i) => `[${i + 1}] ${h.title} — URL: ${h.url}\n${h.content.slice(0, 1500)}`)].join("\n\n");
 }
 
+/** First line of a chunk, shortened at a word boundary. */
+function snippet(content: string, max = 140): string {
+  const line = content.split("\n")[0].replace(/^(Product|Service): /, "");
+  if (line.length <= max) return line;
+  return `${line.slice(0, line.lastIndexOf(" ", max)).replace(/[,.;:]$/, "")}…`;
+}
+
 /** Answer without the language model: point the visitor to the best matching pages. */
 function siteSearchAnswer(hits: SearchHit[]): ChatAnswer {
   if (hits.length === 0) return { answer: HANDOFF, sources: [], mode: "handoff" };
@@ -41,7 +48,7 @@ function siteSearchAnswer(hits: SearchHit[]): ChatAnswer {
   return {
     answer: [
       "Here's what I found on our website:",
-      ...top.map((h) => `- [${h.title}](${h.url}): ${h.content.split("\n")[0].slice(0, 160)}`),
+      ...top.map((h) => `- [${h.title}](${h.url}): ${snippet(h.content)}`),
       `\nFor prices on custom jobs, message us on WhatsApp at ${BUSINESS.phoneDisplay}.`,
     ].join("\n"),
     sources: top.map(({ title, url }) => ({ title, url })),

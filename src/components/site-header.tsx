@@ -3,29 +3,43 @@ import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getCurrentCartCount } from "@/lib/cart/session";
 import { logoutAction } from "@/app/actions/auth";
+import { MobileMenu, type NavLink } from "@/components/mobile-menu";
+
+// Site pages, shown in the header on large screens and in the menu on phones/tablets.
+const PAGES: NavLink[] = [
+  { href: "/", label: "Home" },
+  { href: "/products", label: "Products" },
+  { href: "/services", label: "Services" },
+  { href: "/about", label: "About Us" },
+  { href: "/contact", label: "Contact Us" },
+  { href: "/affiliate", label: "Earn with us" },
+];
+const SHORTCUTS: NavLink[] = [
+  { href: "/products?category=business-cards", label: "Business cards" },
+  { href: "/products?category=marketing", label: "Marketing" },
+];
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-surface/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
         <Link href="/" className="text-xl font-extrabold tracking-tight">
           Mix<span className="text-brand">Print</span>
         </Link>
-        <nav className="flex gap-5 text-sm font-medium text-muted">
-          <Link href="/products" className="hover:text-foreground">
-            Products
-          </Link>
-          <Link href="/products?category=business-cards" className="hidden hover:text-foreground md:inline">
-            Business cards
-          </Link>
-          <Link href="/products?category=marketing" className="hidden hover:text-foreground md:inline">
-            Marketing
-          </Link>
-          <Link href="/affiliate" className="hover:text-foreground">
-            Earn with us
-          </Link>
+        <nav className="hidden gap-5 text-sm font-medium text-muted lg:flex" aria-label="Main">
+          {PAGES.map((l) => (
+            <Link key={l.href} href={l.href} className="hover:text-foreground">
+              {l.label}
+            </Link>
+          ))}
+          {SHORTCUTS.map((l) => (
+            <Link key={l.href} href={l.href} className="hidden hover:text-foreground xl:inline">
+              {l.label}
+            </Link>
+          ))}
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm">
+          <MobileMenu links={[...PAGES, ...SHORTCUTS]} />
           {/* Reads cookies, so it streams in after the static shell. */}
           <Suspense fallback={<span className="h-9 w-32" aria-hidden />}>
             <HeaderSession />

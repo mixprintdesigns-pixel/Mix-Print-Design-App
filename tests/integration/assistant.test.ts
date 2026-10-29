@@ -127,3 +127,13 @@ describe("answerQuestion", () => {
     expect(await answerQuestion("backlit board", [], client)).toMatchObject({ mode: "site-search" });
   });
 });
+
+describe("site-search snippets", () => {
+  it("never cut words in half", async () => {
+    const { answer } = await answerQuestion("business cards printing Lahore shop", [], null);
+    for (const line of answer.split("\n").filter((l) => l.startsWith("- ["))) {
+      expect(line).toMatch(/(\w[.!?)]?|…)$/);
+      expect(line.length).toBeLessThan(260);
+    }
+  });
+});

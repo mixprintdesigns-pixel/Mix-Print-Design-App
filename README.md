@@ -9,6 +9,7 @@ An online printing store for the Pakistani market: product catalog with volume p
 | 1 | Project structure, full database schema, authentication, product catalog, shopping cart, tests | ✅ Done |
 | 1b | Catalog requirements (spec §4): admin dashboard for products, images and categories; subcategories, sorting, filters, SEO, SKUs, publication status, bulk discounts, per-order fees, affiliate %; change options in cart | ✅ Done |
 | 1c | Affiliate module: applications, referral links and click tracking, commissions, withdrawals to JazzCash / Easypaisa / bank, affiliate dashboard, admin review and payouts, program settings, home page promotion | ✅ Done (commissions start flowing once checkout is built) |
+| 1d | Website pages: new home sections, Services (category → sub-type → quality), About, Contact (DB + email), customer reviews, AI chat assistant, header + mobile menu | ✅ Done. See [docs/SITE-PAGES.md](docs/SITE-PAGES.md) |
 | 2 | Checkout, addresses, orders, order tracking, JazzCash / Easypaisa / COD / bank transfer payments | Planned |
 | 3 | Artwork uploads, custom design requests, proof approvals, real-time order chat | Planned |
 | 4 | Admin dashboard (products, orders, proofs), affiliate program, emails / SMS | Planned |

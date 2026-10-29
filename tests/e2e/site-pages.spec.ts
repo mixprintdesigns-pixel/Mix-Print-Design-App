@@ -242,3 +242,36 @@ test.describe("AI chat assistant", () => {
     expect(JSON.stringify(body)).not.toMatch(/sk-ant|ANTHROPIC/);
   });
 });
+
+test.describe("navigation", () => {
+  const pages = [
+    ["Home", /\/$/],
+    ["Services", /\/services$/],
+    ["About Us", /\/about$/],
+    ["Contact Us", /\/contact$/],
+  ] as const;
+
+  test("header links on desktop", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop header");
+    await page.goto("/products");
+    const nav = page.getByRole("navigation", { name: "Main" });
+    for (const [label, url] of pages) {
+      await nav.getByRole("link", { name: label, exact: true }).click();
+      await expect(page).toHaveURL(url);
+    }
+    await expect(page.getByRole("button", { name: "Open menu" })).toBeHidden();
+  });
+
+  test("mobile menu", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "Mobile menu");
+    await page.goto("/products");
+    await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
+    for (const [label, url] of pages) {
+      await page.getByRole("button", { name: "Open menu" }).click();
+      await page.getByRole("navigation", { name: "Mobile" }).getByRole("link", { name: label, exact: true }).click();
+      await expect(page).toHaveURL(url);
+      await expect(page.getByRole("navigation", { name: "Mobile" })).toBeHidden(); // closes after navigating
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});

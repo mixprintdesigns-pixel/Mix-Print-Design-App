@@ -39,6 +39,8 @@ test("home page promotes the affiliate program", async ({ page }) => {
   await section.getByRole("link", { name: "How it works" }).click();
   await expect(page).toHaveURL(/\/affiliate$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("commission");
+  // In the header on large screens, in the menu on phones
+  if (await page.getByRole("button", { name: "Open menu" }).isVisible()) await page.getByRole("button", { name: "Open menu" }).click();
   await expect(page.getByRole("link", { name: "Earn with us" })).toBeVisible();
 });
 
