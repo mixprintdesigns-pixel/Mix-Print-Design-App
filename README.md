@@ -90,3 +90,15 @@ scripts/                 Helper scripts (placeholder image generator)
 - **Login protection:** after 5 failed attempts an account is locked for 15 minutes. Unknown emails take the same time to reject as wrong passwords.
 - **Guest carts:** visitors can shop without an account. On sign-up or sign-in their guest cart is merged into their account cart.
 - **Cache Components:** catalog queries use `"use cache"` with a `catalog` cache tag, so the catalog renders from cache. Anything that reads cookies sits inside `<Suspense>`.
+
+## Deploying to Vercel
+
+The app needs a PostgreSQL database at build time as well as at runtime. The catalog pages are prerendered from the database.
+
+1. Create a PostgreSQL database, for example from Vercel → **Storage** → **Neon** (or Supabase / Prisma Postgres). Use the **pooled** connection string.
+2. In Vercel → Project → **Settings → Environment Variables**, add:
+   - `DATABASE_URL`: the connection string (tick Production and Preview)
+   - `SEED_DEMO_DATA` = `true`: optional, loads the demo catalog. Remove it after the first deploy, or later deploys will reset seeded products to the demo data.
+3. Redeploy. Vercel runs `npm run vercel-build` (`scripts/vercel-build.sh`), which applies database migrations (`prisma migrate deploy`), optionally seeds, then runs `next build`.
+
+The development admin account is never created in production builds.
