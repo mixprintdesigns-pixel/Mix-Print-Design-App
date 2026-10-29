@@ -98,27 +98,33 @@ enum ProductStatus {
 }
 
 model Product {
-  id                     String        @id @default(cuid())
-  sku                    String        @unique // unique product identifier, e.g. BC-STD-001
+  id                     String           @id @default(cuid())
+  sku                    String           @unique // unique product identifier, e.g. BC-STD-001
   name                   String
-  slug                   String        @unique
+  slug                   String           @unique
   summary                String? // short description
   description            String // full description
   categoryId             String
-  category               Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  category               Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   basePriceMinor         Int // per-unit price when no quantity tier applies
-  minQuantity            Int           @default(1)
-  quantityStep           Int           @default(1)
-  turnaroundDays         Int           @default(3) // estimated production time, working days
-  status                 ProductStatus @default(DRAFT)
-  isAvailable            Boolean       @default(true) // can be ordered right now
-  isFeatured             Boolean       @default(false)
-  allowsDesignService    Boolean       @default(true)
+  minQuantity            Int              @default(1)
+  quantityStep           Int              @default(1)
+  turnaroundDays         Int              @default(3) // estimated production time, working days
+  status                 ProductStatus    @default(DRAFT)
+  isAvailable            Boolean          @default(true) // can be ordered right now
+  isFeatured             Boolean          @default(false)
+  allowsDesignService    Boolean          @default(true)
   seoTitle               String?
   seoDescription         String?
   affiliateCommissionBps Int? // overrides the affiliate program default; 1000 = 10%
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
+  serviceCategoryId      String? // where the product appears on the Services page
+  serviceCategory        ServiceCategory? @relation(fields: [serviceCategoryId], references: [id], onDelete: SetNull)
+  serviceSubtypeId       String?
+  serviceSubtype         ServiceSubtype?  @relation(fields: [serviceSubtypeId], references: [id], onDelete: SetNull)
+  serviceQualityId       String?
+  serviceQuality         ServiceQuality?  @relation(fields: [serviceQualityId], references: [id], onDelete: SetNull)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
   images         ProductImage[]
   options        ProductOption[]
@@ -600,4 +606,124 @@ model AffiliateWithdrawal {
 
   @@index([affiliateId, requestedAt])
   @@index([status])
+}
+
+// ─── Services (Service Category → Sub-type → Quality), admin-managed ─────────
+
+model ServiceCategory {
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  title            String
+  shortDescription String
+  imageUrl         String?
+  imageKey         String? // storage key of an uploaded image
+  sortOrder        Int              @default(0)
+  isVisible        Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  subtypes         ServiceSubtype[]
+  products         Product[]
+}
+
+model ServiceSubtype {
+  id               String           @id @default(cuid())
+  categoryId       String
+  category         ServiceCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  slug             String
+  title            String
+  shortDescription String
+  imageUrl         String?
+  imageKey         String?
+  sortOrder        Int              @default(0)
+  isVisible        Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  qualities        ServiceQuality[]
+  products         Product[]
+
+  @@unique([categoryId, slug])
+}
+
+model ServiceQuality {
+  id               String         @id @default(cuid())
+  subtypeId        String
+  subtype          ServiceSubtype @relation(fields: [subtypeId], references: [id], onDelete: Cascade)
+  slug             String
+  title            String
+  shortDescription String
+  imageUrl         String?
+  imageKey         String?
+  sortOrder        Int            @default(0)
+  isVisible        Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  products         Product[]
+
+  @@unique([subtypeId, slug])
+}
+
+// ─── Customer reviews (admin-managed testimonials) ───────────────────────────
+
+model Review {
+  id          String   @id @default(cuid())
+  name        String
+  location    String? // e.g. "Lahore"
+  rating      Int // 1–5
+  comment     String
+  isPublished Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished, sortOrder])
+}
+
+// ─── Contact form submissions ────────────────────────────────────────────────
+
+model ContactMessage {
+  id          String    @id @default(cuid())
+  name        String
+  email       String
+  phone       String?
+  subject     String? // e.g. "Quote: Board Maker / Backlit"
+  message     String
+  ipHash      String?
+  emailSentAt DateTime? // when the notification reached the business inbox
+  emailError  String?
+  handledAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+}
+
+// ─── Editable page content (About page, etc.) ────────────────────────────────
+
+model SiteContent {
+  key       String   @id // e.g. "about"
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ─── AI assistant knowledge base ─────────────────────────────────────────────
+
+// Searchable copy of site content (products, services, pages), rebuilt when the content changes.
+model KnowledgeChunk {
+  id         String   @id @default(cuid())
+  sourceType String // PRODUCT | SERVICE | PAGE
+  sourceId   String
+  title      String
+  url        String
+  content    String
+  createdAt  DateTime @default(now())
+
+  @@index([sourceType])
+}
+
+// Requests counted per key (e.g. "chat:<ip hash>") for basic rate limiting.
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
 }
