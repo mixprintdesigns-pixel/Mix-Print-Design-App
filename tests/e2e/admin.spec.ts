@@ -138,7 +138,7 @@ test.describe("admin catalog management", () => {
     // Customer view: subcategory, gallery, price, WhatsApp order
     await page.goto("/products/offset-printing/stickers-labels");
     await page.getByRole("navigation", { name: "Stickers & Labels types" }).getByRole("link", { name: new RegExp(categoryName) }).click();
-    await page.getByRole("link", { name: new RegExp(productName) }).click();
+    await page.getByRole("link", { name: new RegExp(productName) }).filter({ visible: true }).click();
     await expect(page).toHaveURL(new RegExp(`/products/offset-printing/stickers-labels/e2e-sheets-${run}/e2e-stickers-${run}$`));
     await expect(page.getByRole("heading", { level: 1, name: productName })).toBeVisible();
     await expect(page.getByRole("list", { name: "Product images" }).getByRole("button")).toHaveCount(2);
