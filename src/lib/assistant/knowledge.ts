@@ -102,6 +102,13 @@ async function pageChunks(): Promise<Chunk[]> {
     },
     {
       sourceType: "PAGE",
+      sourceId: "payment",
+      title: "Payment terms and order status",
+      url: "/track",
+      content: `Payment terms: 50% advance before work starts, and the remaining 50% after the work is complete, before delivery. Order steps: Pending (order received), Advance Received (work starts), In Progress, Work Completed (we send pictures of the finished work and request the remaining payment), Fully Paid, Delivered. Check your order status at /track with your order number and phone number. Payment by JazzCash, Easypaisa, bank transfer or cash. Questions about an order: WhatsApp ${BUSINESS.phoneDisplay}.`,
+    },
+    {
+      sourceType: "PAGE",
       sourceId: "ordering",
       title: "How ordering works",
       url: "/products",

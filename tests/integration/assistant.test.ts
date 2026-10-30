@@ -101,7 +101,8 @@ describe("answerQuestion", () => {
 
     const req = requests[0];
     expect(req).toMatchObject({ model: "claude-opus-5-5", fallbacks: "default", betas: ["server-side-fallback-2026-07-01"], output_config: { effort: "low" } });
-    expect(req.tools).toEqual([expect.objectContaining({ type: "web_search_20260209", name: "web_search", max_uses: 2 })]);
+    expect(req.tools).toBeUndefined(); // answers come from our own content only
+    expect(JSON.stringify(req.system)).toContain("Answer ONLY from the site content");
     expect(JSON.stringify(req.system)).toContain("Never name, recommend or link to other printing companies");
     // Leading assistant greeting dropped; history then the question with site context
     expect(req.messages[0]).toEqual({ role: "user", content: "Hello" });
@@ -141,5 +142,29 @@ describe("site-search snippets", () => {
       expect(line).toMatch(/(\w[.!?)]?|…)$/);
       expect(line.length).toBeLessThan(260);
     }
+  });
+});
+
+describe("answerQuestion with OpenAI", () => {
+  it("uses OpenAI when its key is set, grounded in our own content", async () => {
+    const requests: { url: string; body: { model: string; messages: { role: string; content: string }[] }; auth: string }[] = [];
+    const fakeFetch = (async (url: string, init: RequestInit) => {
+      requests.push({ url, body: JSON.parse(String(init.body)), auth: String((init.headers as Record<string, string>).Authorization) });
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "Yes! See [Board Maker: Backlit Sign Board](/services/board-maker/backlit-sign-board)." } }] }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+    const result = await answerQuestion("Do you make backlit boards?", [], null, { apiKey: "sk-openai", fetch: fakeFetch });
+    expect(result).toMatchObject({ mode: "ai", sources: [{ url: "/services/board-maker/backlit-sign-board" }] });
+    expect(requests[0]).toMatchObject({ url: "https://api.openai.com/v1/chat/completions", auth: "Bearer sk-openai" });
+    expect(requests[0].body.messages[0].content).toContain("Answer ONLY from the site content");
+    expect(requests[0].body.messages.at(-1)!.content).toContain("URL: /services/board-maker/backlit-sign-board");
+  });
+
+  it("falls back to listing our pages if OpenAI fails", async () => {
+    const failing = (async () => new Response(JSON.stringify({ error: { message: "down" } }), { status: 500 })) as unknown as typeof fetch;
+    const result = await answerQuestion("Do you make backlit boards?", [], null, { apiKey: "sk-openai", fetch: failing });
+    expect(result.mode).toBe("site-search");
   });
 });

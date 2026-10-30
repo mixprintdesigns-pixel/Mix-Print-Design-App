@@ -24,8 +24,10 @@ You help visitors with Mix Print Design's products, prices, services (sign board
 How to answer:
 - Use the SITE CONTENT provided with each question as your main source. Prices, products, services and policies must come from it; never invent a price, product, discount or delivery promise.
 - Link to the relevant pages with Markdown links using the exact relative URLs from the site content, e.g. [Matte business cards](/services/offset-printing/business-cards/matte).
-- If the site content does not answer the question, you may use web search for general printing knowledge (materials, sizes, file formats, finishes). Present it as general information, and bring the answer back to how Mix Print Design can help.
-- Stay on Mix Print Design topics. Never name, recommend or link to other printing companies, sign makers or online print shops, even if search results mention them. Politely decline unrelated requests.
+- Answer ONLY from the site content (services, categories, products, prices, payment terms and FAQs). Do not use outside knowledge for prices, products or policies.
+- Payment terms: 50% advance before work starts, the remaining 50% after the work is complete, before delivery.
+- To order, the visitor can press "Place an order" in this chat (choose a product, give name, phone and requirements), use the "Order on WhatsApp" button on any product page, or message us on WhatsApp.
+- Stay on Mix Print Design topics. Never name, recommend or link to other printing companies, sign makers or online print shops. Politely decline unrelated requests.
 - If you cannot answer confidently, say so and suggest WhatsApp (${BUSINESS.phoneDisplay}) or the contact page (/contact). For custom sizes, sign boards and bulk jobs, suggest a quote.
 - Be warm, clear and brief: usually 2–5 short sentences or a short list. Reply in the visitor's language (English, Urdu or Roman Urdu).`;
 
@@ -56,6 +58,44 @@ function siteSearchAnswer(hits: SearchHit[]): ChatAnswer {
   };
 }
 
+// ─── OpenAI (preferred when OPENAI_API_KEY or IMAGE_API_KEY is set) ────────────
+
+const OPENAI_MODEL = process.env.OPENAI_CHAT_MODEL ?? "gpt-4.1-mini";
+const openAiKey = () => process.env.OPENAI_API_KEY || process.env.IMAGE_API_KEY || null;
+
+/** Answers with the OpenAI Chat Completions API, grounded in the site content only. */
+async function answerWithOpenAI(
+  question: string,
+  history: ChatTurn[],
+  hits: SearchHit[],
+  apiKey: string,
+  fetchImpl: typeof fetch,
+): Promise<ChatAnswer> {
+  const response = await fetchImpl("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      max_tokens: 700,
+      temperature: 0.3,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...history.slice(-8).map((t) => ({ role: t.role, content: t.content })),
+        { role: "user", content: `${formatContext(hits)}\n\nVisitor question: ${question}` },
+      ],
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const body = (await response.json().catch(() => null)) as { choices?: { message?: { content?: string } }[]; error?: { message?: string } } | null;
+  const text = body?.choices?.[0]?.message?.content?.trim();
+  if (!response.ok || !text) {
+    console.error(`Chat assistant OpenAI error ${response.status}: ${body?.error?.message ?? "empty answer"}`);
+    return siteSearchAnswer(hits);
+  }
+  const sources = hits.filter((h) => text.includes(`](${h.url})`)).map(({ title, url }) => ({ title, url }));
+  return { answer: text, sources: sources.slice(0, 6), mode: "ai" };
+}
+
 let defaultClient: MessagesClient | null = null;
 function getClient(): MessagesClient | null {
   if (!process.env.ANTHROPIC_API_KEY) return null;
@@ -64,16 +104,26 @@ function getClient(): MessagesClient | null {
 }
 
 /**
- * Answers a visitor question grounded in the site's own content, with Claude's web search as a fallback.
- * Without an API key it falls back to listing the best matching pages.
+ * Answers a visitor question from the site's own content only: with OpenAI when OPENAI_API_KEY (or
+ * IMAGE_API_KEY) is set, otherwise with Claude when ANTHROPIC_API_KEY is set, otherwise by listing the
+ * best matching pages.
  */
 export async function answerQuestion(
   question: string,
   history: ChatTurn[] = [],
   client: MessagesClient | null = getClient(),
+  openAi: { apiKey: string | null; fetch: typeof fetch } = { apiKey: openAiKey(), fetch },
 ): Promise<ChatAnswer> {
   await ensureFreshIndex();
   const hits = await searchKnowledge(question);
+  if (openAi.apiKey) {
+    try {
+      return await answerWithOpenAI(question, history, hits, openAi.apiKey, openAi.fetch);
+    } catch (error) {
+      console.error(`Chat assistant OpenAI request failed: ${(error as Error).message}`);
+      return siteSearchAnswer(hits);
+    }
+  }
   if (!client) return siteSearchAnswer(hits);
 
   // The conversation must start with a user turn, so drop any leading assistant messages.
@@ -100,14 +150,6 @@ export async function answerQuestion(
         fallbacks: "default", // a safety decline is retried on Anthropic's recommended fallback model
         output_config: { effort: "low" }, // chat: fast, concise answers
         system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-        tools: [
-          {
-            type: "web_search_20260209",
-            name: "web_search",
-            max_uses: 2,
-            user_location: { type: "approximate", city: "Lahore", country: "PK", timezone: "Asia/Karachi" },
-          },
-        ],
         messages,
       });
       // A long server-side search can pause the turn; send it back so the server continues.

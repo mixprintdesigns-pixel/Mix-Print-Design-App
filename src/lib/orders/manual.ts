@@ -1,7 +1,9 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { approveCommission, createCommissionForOrder, onOrderStatusChanged } from "@/lib/affiliate/service";
+import { calculateCommission } from "@/lib/affiliate/commission";
+import { approveCommission, createCommissionForOrder, getAffiliateSettings, onOrderStatusChanged } from "@/lib/affiliate/service";
+import type { Prisma } from "@/generated/prisma/client";
 import { readSiteSettings, whatsappUrl } from "@/lib/content/site-settings";
 import { prisma } from "@/lib/db";
 import { resendTransport, type EmailTransport } from "@/lib/email";
@@ -173,6 +175,58 @@ export async function updateOrderStatus(
 
   if (status === "WORK_COMPLETED") return notifyWorkCompleted(orderId, transport);
   return { emailed: null, whatsappLink: null };
+}
+
+/**
+ * Sets the agreed total (e.g. after confirming a chat order's price). Item totals are scaled to match,
+ * and a pending affiliate commission is recalculated.
+ */
+export async function setOrderTotal(orderId: string, totalMinor: number): Promise<void> {
+  const order = await prisma.order.findUniqueOrThrow({
+    where: { id: orderId },
+    include: {
+      items: { orderBy: { id: "asc" }, include: { product: { select: { affiliateCommissionBps: true, affiliateCommissionMinor: true } } } },
+      commission: { include: { affiliate: { select: { commissionRateBps: true } } } },
+    },
+  });
+  if (totalMinor === order.totalMinor) return;
+  const oldSum = order.items.reduce((s, i) => s + i.lineTotalMinor, 0);
+  let remaining = totalMinor;
+  const lines = order.items.map((item, idx) => {
+    const line = idx === order.items.length - 1 ? remaining : oldSum > 0 ? Math.round((item.lineTotalMinor * totalMinor) / oldSum) : 0;
+    remaining -= line;
+    return { item, line };
+  });
+  await prisma.$transaction(async (tx) => {
+    for (const { item, line } of lines) {
+      await tx.orderItem.update({
+        where: { id: item.id },
+        data: { lineTotalMinor: line, unitPriceMinor: Math.round(line / Math.max(item.quantity, 1)) },
+      });
+    }
+    await tx.order.update({
+      where: { id: orderId },
+      data: { totalMinor, subtotalMinor: totalMinor, amountPaidMinor: Math.min(order.amountPaidMinor, totalMinor) },
+    });
+    if (order.commission?.status === "PENDING") {
+      const settings = await getAffiliateSettings();
+      const result = calculateCommission(
+        lines.map(({ item, line }) => ({
+          productId: item.productId,
+          productName: item.productName,
+          lineTotalMinor: line,
+          productRateBps: item.product?.affiliateCommissionBps ?? null,
+          productFixedMinor: item.product?.affiliateCommissionMinor ?? null,
+        })),
+        { affiliateRateBps: order.commission.affiliate.commissionRateBps, defaultRateBps: settings.defaultRateBps },
+        order.discountMinor,
+      );
+      await tx.affiliateCommission.update({
+        where: { id: order.commission.id },
+        data: { baseAmountMinor: result.baseAmountMinor, amountMinor: result.amountMinor, breakdown: result.breakdown as unknown as Prisma.InputJsonValue },
+      });
+    }
+  });
 }
 
 /** The message sent when the work is finished: photos and the remaining payment. */

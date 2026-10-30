@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/session";
-import { addOrderPhoto, ORDER_STATUSES, recordOrder, recordOrderSchema, updateOrderStatus } from "@/lib/orders/manual";
+import { addOrderPhoto, ORDER_STATUSES, recordOrder, recordOrderSchema, setOrderTotal, updateOrderStatus } from "@/lib/orders/manual";
 import { parseRupees } from "@/lib/admin/product-input";
 import type { ActionState } from "./affiliate-actions";
 
@@ -45,6 +45,10 @@ export async function updateOrderStatusAction(_prev: ActionState, data: FormData
   const amountText = String(data.get("amountReceived") ?? "").trim();
   const amount = amountText ? parseRupees(amountText) : null;
   if (amountText && amount === null) return { error: "Amount received: enter rupees, e.g. 2500." };
+  const totalText = String(data.get("newTotal") ?? "").trim();
+  const newTotal = totalText ? parseRupees(totalText) : null;
+  if (totalText && !newTotal) return { error: "Agreed total: enter rupees, e.g. 4500." };
+  if (newTotal) await setOrderTotal(id, newTotal);
   const result = await updateOrderStatus(id, status, staff.id, { amountReceivedMinor: amount });
   refresh();
   if (status === "WORK_COMPLETED") {

@@ -104,7 +104,7 @@ export default async function AdminOrdersPage() {
                     <td className="p-3">
                       <span className="font-semibold">{o.number}</span>
                       <span className="block text-xs text-muted">
-                        {o.source === "WHATSAPP" ? "WhatsApp" : "Website"} · {o.placedAt.toLocaleDateString("en-PK")}
+                        {o.source === "WHATSAPP" ? "WhatsApp" : o.source === "CHAT" ? "AI chat" : "Website"} · {o.placedAt.toLocaleDateString("en-PK")}
                       </span>
                     </td>
                     <td className="p-3">
@@ -152,6 +152,13 @@ export default async function AdminOrdersPage() {
                             </option>
                           ))}
                         </select>
+                        <input
+                          name="newTotal"
+                          inputMode="decimal"
+                          className="input w-28 py-1.5 text-xs"
+                          placeholder="Agreed total"
+                          aria-label={`Agreed total for ${o.number}`}
+                        />
                         <input
                           name="amountReceived"
                           inputMode="decimal"

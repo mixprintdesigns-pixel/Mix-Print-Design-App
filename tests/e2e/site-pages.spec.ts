@@ -362,3 +362,33 @@ test.describe("navigation", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
+
+test("customers can place an order in the AI chat; it appears in admin as Pending", async ({ browser, isMobile }) => {
+  test.skip(isMobile, "Admin part runs on desktop");
+  const run = Date.now().toString(36);
+  const context = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": `10.6.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` } });
+  const page = await context.newPage();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open chat assistant" }).click();
+  const chat = page.getByRole("dialog", { name: "Mix Print Design assistant" });
+  await chat.getByRole("button", { name: "Place an order in this chat" }).click();
+  const form = chat.getByRole("form", { name: "Place an order" });
+  await expect(form.getByLabel("Product").locator("option", { hasText: "A5 Flyers" })).toHaveCount(1);
+  await form.getByLabel("Product").selectOption({ label: (await form.getByLabel("Product").locator("option", { hasText: "A5 Flyers" }).textContent())! });
+  await form.getByLabel("Quantity").fill("500");
+  await form.getByLabel("Your name").fill(`Chat ${run}`);
+  await form.getByLabel("Phone / WhatsApp").fill("0333 1234567");
+  await form.getByLabel("Requirements").fill("Two-sided, glossy, by Friday");
+  await form.getByRole("button", { name: "Review order" }).click();
+  await chat.getByTestId("chat-order-confirm").getByRole("button", { name: "Confirm order" }).click();
+  const answer = chat.getByTestId("chat-answer").last();
+  await expect(answer).toContainText(/Your order MP-\w+ is received \(Pending\)/);
+  const number = (await answer.textContent())!.match(/MP-\w+/)![0];
+
+  const admin = await adminPage(browser);
+  await admin.goto("/admin/orders");
+  const row = admin.getByTestId("admin-order").filter({ hasText: number });
+  await expect(row).toContainText(`Chat ${run}`);
+  await expect(row).toContainText("AI chat");
+  await expect(row.getByTestId("order-status")).toHaveText("Pending");
+});

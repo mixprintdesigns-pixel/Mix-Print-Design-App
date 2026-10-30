@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { BrandBadge } from "@/components/brand-logo";
+import { ChatOrderForm } from "./chat-order-form";
 
 type Message = { role: "user" | "assistant"; content: string; sources?: { title: string; url: string }[] };
 
@@ -53,6 +54,7 @@ export function ChatWidget() {
   const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ordering, setOrdering] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -153,7 +155,16 @@ export function ChatWidget() {
                 Typing…
               </p>
             )}
-            {messages.length === 1 && (
+            {ordering && (
+              <ChatOrderForm
+                onCancel={() => setOrdering(false)}
+                onDone={(text) => {
+                  setOrdering(false);
+                  setMessages((m) => [...m, { role: "assistant", content: text }]);
+                }}
+              />
+            )}
+            {messages.length === 1 && !ordering && (
               <div className="flex flex-wrap gap-2">
                 {SUGGESTIONS.map((s) => (
                   <button key={s} type="button" onClick={() => send(s)} className="rounded-full border border-border px-3 py-1 text-xs hover:border-brand">
@@ -164,6 +175,15 @@ export function ChatWidget() {
             )}
           </div>
 
+          {!ordering && (
+            <button
+              type="button"
+              onClick={() => setOrdering(true)}
+              className="border-t border-border py-2 text-center text-xs font-semibold text-brand hover:bg-brand/5"
+            >
+              Place an order in this chat
+            </button>
+          )}
           <form
             className="flex gap-2 border-t border-border p-3"
             onSubmit={(e) => {
