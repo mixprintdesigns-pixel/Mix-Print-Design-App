@@ -5,10 +5,10 @@ import { ReviewCard } from "@/components/reviews/review-card";
 import { CategoryCard } from "@/components/catalog/category-card";
 import { JsonLd } from "@/components/catalog/json-ld";
 import { QuoteButtons } from "@/components/services/quote-buttons";
-import { quoteLink } from "@/lib/business";
 import { getCategoryTree, getFeaturedProducts } from "@/lib/catalog/queries";
 import { categoryUrl, serviceUrl } from "@/lib/catalog/tree";
 import { pageMetadata } from "@/lib/content/seo-pages";
+import { getSiteSettings, whatsappUrl } from "@/lib/content/site-settings";
 import { getPublishedReviews } from "@/lib/reviews/queries";
 import { localBusinessJsonLd } from "@/lib/seo";
 import { getPublicProgramTerms } from "@/lib/affiliate/public";
@@ -38,12 +38,16 @@ function reviewsJsonLd(reviews: Awaited<ReturnType<typeof getPublishedReviews>>)
 
 // Catalog data is cached ("use cache"), so this whole page prerenders into the static shell.
 export default async function HomePage() {
-  const [services, featured, affiliate, reviews] = await Promise.all([
+  const [services, featured, affiliate, reviews, settings] = await Promise.all([
     getCategoryTree(),
     getFeaturedProducts(),
     getPublicProgramTerms(),
     getPublishedReviews(),
+    getSiteSettings(),
   ]);
+  // The tagline is editable in admin; its last two words are highlighted.
+  const taglineWords = settings.tagline.split(" ");
+  const taglineEnd = taglineWords.splice(-2).join(" ");
   const reviewData = reviewsJsonLd(reviews);
 
   return (
@@ -57,19 +61,24 @@ export default async function HomePage() {
           <div>
             <BrandLogo className="h-14 w-auto sm:h-16" priority />
             <h1 className="mt-6 text-4xl font-extrabold tracking-tight sm:text-5xl">
-              Print that makes your brand <span className="text-brand">stand out.</span>
+              {taglineWords.join(" ")} <span className="text-brand">{taglineEnd}</span>
             </h1>
             <p className="mt-4 max-w-prose text-lg text-muted">
               Business cards, flyers, sign boards, banners and packaging from Lahore, delivered across Pakistan. Upload your
               artwork or let our designers create it.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <Link href="/products" className="btn-primary px-6 py-3 text-base">
-                Shop Now
+              <Link href="/services" className="btn-primary px-6 py-3 text-base">
+                View Services
               </Link>
-              <Link href={quoteLink()} className="btn-secondary px-6 py-3 text-base">
-                Get a Quote
-              </Link>
+              <a
+                href={whatsappUrl(settings, "Assalam o Alaikum! I'd like to place an order.")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn border border-green-600 px-6 py-3 text-base text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950"
+              >
+                Order on WhatsApp
+              </a>
             </div>
           </div>
           <ol className="grid grid-cols-2 gap-3 text-sm">
@@ -89,31 +98,9 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* 2. Top products */}
-      {featured.length > 0 && (
-        <section className="mx-auto max-w-6xl px-4 pt-12" aria-labelledby="top-products-heading">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <h2 id="top-products-heading" className="text-2xl font-bold">
-              Top products
-            </h2>
-            <Link href="/products" className="text-sm font-semibold text-brand">
-              View all products →
-            </Link>
-          </div>
-          {/* Swipeable row on phones, grid on larger screens */}
-          <div className="-mx-4 mt-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
-            {featured.map((p) => (
-              <div key={p.id} className="w-72 shrink-0 snap-start sm:w-auto">
-                <ProductCard product={p} />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* 3. Services: the main services from the shared category tree */}
+      {/* 2. The four main services */}
       {services.length > 0 && (
-        <section className="mx-auto max-w-6xl px-4 pt-14" aria-labelledby="services-heading">
+        <section className="mx-auto max-w-6xl px-4 pt-12" aria-labelledby="services-heading">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-sm font-semibold uppercase tracking-widest text-accent">What we do</p>
@@ -136,7 +123,68 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* 4. Customer reviews (managed in Admin → Reviews; hidden until there are published reviews) */}
+      {/* 3. Featured products */}
+      {featured.length > 0 && (
+        <section className="mx-auto max-w-6xl px-4 pt-14" aria-labelledby="top-products-heading">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 id="top-products-heading" className="text-2xl font-bold">
+              Top products
+            </h2>
+            <Link href="/products" className="text-sm font-semibold text-brand">
+              View all products →
+            </Link>
+          </div>
+          {/* Swipeable row on phones, grid on larger screens */}
+          <div className="-mx-4 mt-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
+            {featured.map((p) => (
+              <div key={p.id} className="w-72 shrink-0 snap-start sm:w-auto">
+                <ProductCard product={p} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 4. Affiliate program */}
+      <section className="mx-auto max-w-6xl px-4 pt-14" aria-labelledby="affiliate-heading">
+        <div className="card grid gap-6 overflow-hidden bg-gradient-to-br from-brand/10 via-surface to-accent/10 p-8 md:grid-cols-[1.4fr_1fr] md:items-center">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-widest text-accent">Affiliate program</p>
+            <h2 id="affiliate-heading" className="mt-2 text-3xl font-extrabold tracking-tight">
+              Share Mix Print Design. Earn <span className="text-brand">{formatPercent(affiliate.defaultRateBps)}</span> on every order.
+            </h2>
+            <p className="mt-3 text-muted">
+              Designers, influencers and community admins earn commission when people they refer order printing from Mix Print Design.
+              Paid out to JazzCash, Easypaisa or your bank.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link href="/affiliate/join" className="btn-primary">
+                Become an affiliate
+              </Link>
+              <Link href="/affiliate" className="btn-secondary">
+                How it works
+              </Link>
+            </div>
+          </div>
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            {[
+              [formatPercent(affiliate.defaultRateBps), "commission on product value"],
+              [`${affiliate.cookieDays} days`, "referral window"],
+              [formatPKR(affiliate.minWithdrawalMinor), "minimum payout"],
+              ["3 ways", "JazzCash, Easypaisa, bank"],
+            ].map(([value, label]) => (
+              <div key={label} className="rounded-lg bg-surface/80 p-4">
+                <dt className="sr-only">{label}</dt>
+                <dd>
+                  <span className="block text-2xl font-black text-brand">{value}</span>
+                  <span className="text-muted">{label}</span>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+      {/* 5. Customer reviews (managed in Admin → Reviews; hidden until there are published reviews) */}
       {reviews.length > 0 && (
         <section className="mx-auto max-w-6xl px-4 pt-14" aria-labelledby="reviews-heading">
           <p className="text-sm font-semibold uppercase tracking-widest text-accent">Testimonials</p>
@@ -186,44 +234,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 pt-12" aria-labelledby="affiliate-heading">
-        <div className="card grid gap-6 overflow-hidden bg-gradient-to-br from-brand/10 via-surface to-accent/10 p-8 md:grid-cols-[1.4fr_1fr] md:items-center">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-widest text-accent">Affiliate program</p>
-            <h2 id="affiliate-heading" className="mt-2 text-3xl font-extrabold tracking-tight">
-              Share Mix Print Design. Earn <span className="text-brand">{formatPercent(affiliate.defaultRateBps)}</span> on every order.
-            </h2>
-            <p className="mt-3 text-muted">
-              Designers, influencers and community admins earn commission when people they refer order printing from Mix Print Design.
-              Paid out to JazzCash, Easypaisa or your bank.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Link href="/affiliate/join" className="btn-primary">
-                Become an affiliate
-              </Link>
-              <Link href="/affiliate" className="btn-secondary">
-                How it works
-              </Link>
-            </div>
-          </div>
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            {[
-              [formatPercent(affiliate.defaultRateBps), "commission on product value"],
-              [`${affiliate.cookieDays} days`, "referral window"],
-              [formatPKR(affiliate.minWithdrawalMinor), "minimum payout"],
-              ["3 ways", "JazzCash, Easypaisa, bank"],
-            ].map(([value, label]) => (
-              <div key={label} className="rounded-lg bg-surface/80 p-4">
-                <dt className="sr-only">{label}</dt>
-                <dd>
-                  <span className="block text-2xl font-black text-brand">{value}</span>
-                  <span className="text-muted">{label}</span>
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </section>
     </>
   );
 }

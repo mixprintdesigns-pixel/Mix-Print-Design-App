@@ -12,7 +12,7 @@ async function openBusinessCards(page: Page) {
 test("browse catalog, filter and search", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Print that makes your brand/ })).toBeVisible();
-  await page.getByRole("link", { name: "Shop Now" }).click();
+  await page.goto("/products");
 
   await expect(page.getByRole("link", { name: /Die-cut Stickers/ })).toBeVisible();
   // The category tree expands: main service → category; a parent includes its sub-categories' products.

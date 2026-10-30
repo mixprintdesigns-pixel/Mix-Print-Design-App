@@ -13,6 +13,7 @@ const sections: { href: string; label: string; ready: boolean }[] = [
   { href: "/admin/reviews", label: "Reviews", ready: true },
   { href: "/admin/about", label: "About page", ready: true },
   { href: "/admin/seo", label: "SEO", ready: true },
+  { href: "/admin/settings", label: "Contact & social", ready: true },
   { href: "/admin/messages", label: "Contact messages", ready: true },
   { href: "/admin/orders", label: "Orders", ready: false },
   { href: "/admin/designs", label: "Design work", ready: false },

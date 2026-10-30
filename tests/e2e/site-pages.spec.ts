@@ -10,6 +10,16 @@ async function adminPage(browser: Browser) {
   return page;
 }
 
+test("footer shows contact details and social links", async ({ page }) => {
+  await page.goto("/");
+  const footer = page.locator("footer");
+  await expect(footer.getByText("Raiwind Road, Lahore, Pakistan")).toBeVisible();
+  await expect(footer.getByRole("link", { name: "+92 303 488 9255" })).toHaveAttribute("href", "tel:+923034889255");
+  await expect(footer.getByRole("link", { name: "mixprintdesigns@gmail.com" })).toHaveAttribute("href", "mailto:mixprintdesigns@gmail.com");
+  await expect(footer.getByRole("link", { name: /^Facebook/ })).toHaveAttribute("href", "https://facebook.com/mixprintdesign");
+  await expect(footer.getByRole("link", { name: /^WhatsApp/ })).toHaveAttribute("href", "https://wa.me/923034889255");
+});
+
 test.describe("home page", () => {
   test("shows hero, top products, services and reviews in order", async ({ page, browser, isMobile }) => {
     test.skip(isMobile, "Admin part runs on desktop");
@@ -33,11 +43,11 @@ test.describe("home page", () => {
 
     await page.goto("/");
     await expect(page.getByRole("img", { name: "Mix Print Design" }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: "Shop Now" })).toHaveAttribute("href", "/products");
-    await expect(page.getByRole("link", { name: "Get a Quote" })).toHaveAttribute("href", /\/contact\?subject=Quote/);
+    await expect(page.getByRole("link", { name: "View Services" })).toHaveAttribute("href", "/services");
+    await expect(page.getByRole("main").getByRole("link", { name: "Order on WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/923034889255\?text=/);
 
     const headings = await page.locator("main h2").allTextContents();
-    const order = ["Top products", "Our services", "What our customers say"].map((h) => headings.findIndex((x) => x.includes(h)));
+    const order = ["Our services", "Top products", "Share Mix Print Design", "What our customers say"].map((h) => headings.findIndex((x) => x.includes(h)));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
 
@@ -198,9 +208,9 @@ test.describe("contact page", () => {
     await expect(page.getByLabel("Subject (optional)")).toHaveValue("Quote: Board Maker / 3D Sign Board");
 
     await expect(page.getByRole("link", { name: "+92 303 488 9255" }).first()).toHaveAttribute("href", "tel:+923034889255");
-    await expect(page.getByRole("link", { name: "mixprintdesigns@gmail.com" })).toHaveAttribute("href", "mailto:mixprintdesigns@gmail.com");
-    await expect(page.getByRole("link", { name: "facebook.com/mixprintdesign" })).toHaveAttribute("href", "https://facebook.com/mixprintdesign");
-    await expect(page.getByRole("link", { name: "Chat on WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/923034889255/);
+    await expect(page.getByRole("main").getByRole("link", { name: "mixprintdesigns@gmail.com" })).toHaveAttribute("href", "mailto:mixprintdesigns@gmail.com");
+    await expect(page.getByRole("main").getByRole("link", { name: "facebook.com/mixprintdesign" })).toHaveAttribute("href", "https://facebook.com/mixprintdesign");
+    await expect(page.getByRole("main").getByRole("link", { name: "Chat on WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/923034889255/);
     await expect(page.getByTitle("Mix Print Design location on Google Maps")).toHaveAttribute("src", /google\.com\/maps\?q=.*Raiwind/);
 
     await page.getByRole("button", { name: "Send message" }).click();

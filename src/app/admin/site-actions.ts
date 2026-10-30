@@ -10,6 +10,7 @@ import type { ActionState } from "./affiliate-actions";
 import { setMessageHandled } from "@/lib/contact/service";
 import { aboutSchema, CONTENT_TAG, getAboutContent, saveAboutContent } from "@/lib/content/about";
 import { saveSeoPages, SEO_PAGES, seoPagesSchema, type SeoPageKey } from "@/lib/content/seo-pages";
+import { saveSiteSettings, siteSettingsSchema } from "@/lib/content/site-settings";
 import { newKey, saveFile } from "@/lib/storage";
 import { checkImage } from "@/lib/storage/images";
 
@@ -101,6 +102,30 @@ export async function saveSeoPagesAction(_prev: ActionState, data: FormData): Pr
   updateTag(CONTENT_TAG);
   refresh();
   return { message: "SEO settings saved." };
+}
+
+// ─── Contact details, social links, map and tagline ──────────────────────────
+
+export async function saveSiteSettingsAction(_prev: ActionState, data: FormData): Promise<ActionState> {
+  await requireStaff(["ADMIN"]);
+  const field = (k: string) => String(data.get(k) ?? "");
+  const parsed = siteSettingsSchema.safeParse({
+    tagline: field("tagline"),
+    address: field("address"),
+    phoneDisplay: field("phoneDisplay"),
+    whatsappNumber: field("whatsappNumber"),
+    email: field("email"),
+    facebookUrl: field("facebookUrl"),
+    instagramUrl: field("instagramUrl"),
+    tiktokUrl: field("tiktokUrl"),
+    youtubeUrl: field("youtubeUrl"),
+    mapEmbedUrl: field("mapEmbedUrl"),
+  });
+  if (!parsed.success) return { error: firstIssue(parsed.error) };
+  await saveSiteSettings(parsed.data);
+  updateTag(CONTENT_TAG);
+  refresh();
+  return { message: "Contact details saved." };
 }
 
 // ─── Contact messages ────────────────────────────────────────────────────────
