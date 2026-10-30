@@ -4,8 +4,9 @@
 import { refresh, updateTag } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/session";
+import { prisma } from "@/lib/db";
 import { REVIEWS_TAG } from "@/lib/reviews/queries";
-import { deleteReview, moveReview, reviewSchema, saveReview } from "@/lib/reviews/admin";
+import { moveReview, reviewSchema, saveReview } from "@/lib/reviews/admin";
 import type { ActionState } from "./affiliate-actions";
 import { setMessageHandled } from "@/lib/contact/service";
 import { aboutSchema, CONTENT_TAG, getAboutContent, saveAboutContent } from "@/lib/content/about";
@@ -45,12 +46,13 @@ export async function saveReviewAction(_prev: ActionState, data: FormData): Prom
 export async function reviewCommandAction(_prev: ActionState, data: FormData): Promise<ActionState> {
   await requireStaff(["ADMIN"]);
   const reviewId = id.parse(data.get("id"));
-  const command = z.enum(["up", "down", "delete"]).parse(data.get("command"));
-  if (command === "delete") await deleteReview(reviewId);
+  const command = z.enum(["up", "down", "hide"]).parse(data.get("command"));
+  // Reviews are hidden, never deleted.
+  if (command === "hide") await prisma.review.update({ where: { id: reviewId }, data: { isPublished: false } });
   else await moveReview(reviewId, command);
   updateTag(REVIEWS_TAG);
   refresh();
-  return { message: command === "delete" ? "Review deleted." : "Order saved." };
+  return { message: command === "hide" ? "Review hidden." : "Order saved." };
 }
 
 // ─── About page ──────────────────────────────────────────────────────────────

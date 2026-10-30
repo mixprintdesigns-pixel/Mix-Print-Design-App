@@ -3,7 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import {
   categoryCommandAction,
-  deleteCategoryAction,
+  generateCategoryImageAction,
   saveCategoryAction,
   uploadCategoryImageAction,
   type AdminFormState,
@@ -157,17 +157,6 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
                         <a href={`/services/${c.path.join("/")}`} target="_blank" rel="noreferrer" className="text-muted hover:text-foreground">
                           View
                         </a>
-                        <button
-                          type="button"
-                          className="text-red-600"
-                          disabled={pending}
-                          onClick={() => {
-                            if (!confirm(`Delete category “${c.name}”?`)) return;
-                            startTransition(async () => setError((await deleteCategoryAction(c.id)).error ?? null));
-                          }}
-                        >
-                          Delete
-                        </button>
                       </span>
                     </td>
                   </tr>
@@ -391,6 +380,20 @@ function CategoryImage({ category }: { category: Category }) {
       <div className="flex gap-2">
         <button className="btn-primary" disabled={pending}>
           {pending ? "Uploading…" : "Upload image"}
+        </button>
+        <button
+          type="button"
+          className="btn-secondary"
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              setMessage({ ok: "Generating image… (about 30 seconds)" });
+              const result = await generateCategoryImageAction(category.id);
+              setMessage(result.error ? { error: result.error } : { ok: "Image generated." });
+            })
+          }
+        >
+          {category.imageUrl ? "Regenerate image" : "Generate image with AI"}
         </button>
         {category.imageUrl && (
           <button

@@ -81,9 +81,11 @@ export default async function AdminReviewsPage() {
                 <SubmitButton name="command" value="down" className="btn-secondary px-2 py-1 text-xs">
                   <span aria-label="Move down">↓</span>
                 </SubmitButton>
-                <SubmitButton name="command" value="delete" className="btn-secondary px-2 py-1 text-xs text-red-600">
-                  Delete
-                </SubmitButton>
+                {r.isPublished && (
+                  <SubmitButton name="command" value="hide" className="btn-secondary px-2 py-1 text-xs">
+                    Hide
+                  </SubmitButton>
+                )}
               </ActionForm>
             </div>
             <details className="mt-3">

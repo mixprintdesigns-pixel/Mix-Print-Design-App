@@ -2,6 +2,9 @@ import { CategoryManager } from "@/components/admin/category-manager";
 import { categoryChoices } from "@/lib/admin/editor-data";
 import { requireStaff } from "@/lib/auth/session";
 
+// AI image generation can take up to a minute.
+export const maxDuration = 120;
+
 export const metadata = { title: "Categories & Services" };
 
 export default async function AdminCategoriesPage() {

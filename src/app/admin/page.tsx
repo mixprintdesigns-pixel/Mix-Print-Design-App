@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { getDashboardCounts } from "@/lib/admin/catalog-service";
+import { generatedImageCount } from "@/lib/images/generate";
 
 export default async function AdminDashboard() {
-  const counts = await getDashboardCounts();
+  const [counts, aiImages] = await Promise.all([getDashboardCounts(), generatedImageCount()]);
   const tiles = [
     { label: "Published products", value: counts.published, href: "/admin/products?status=PUBLISHED" },
     { label: "Draft products", value: counts.drafts, href: "/admin/products?status=DRAFT" },
     { label: "Published but unavailable", value: counts.unavailable, href: "/admin/products?status=PUBLISHED" },
     { label: "Categories", value: counts.categories, href: "/admin/categories" },
     { label: "Customers", value: counts.customers, href: null },
+    { label: "AI images generated (see OpenAI billing for cost)", value: aiImages, href: null },
   ];
   return (
     <>

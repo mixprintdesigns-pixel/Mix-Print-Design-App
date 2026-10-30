@@ -4,12 +4,12 @@ import { redirect } from "next/navigation";
 import { refresh, updateTag } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/session";
+import { generateCategoryImage, generateProductImage, ImageGenerationError, type ImageView } from "@/lib/images/generate";
+import { prisma } from "@/lib/db";
 import { CATALOG_TAG } from "@/lib/catalog/queries";
 import {
   addProductImage,
   AdminInputError,
-  deleteCategory,
-  deleteProduct,
   deleteProductImage,
   moveCategory,
   removeCategoryImage,
@@ -72,11 +72,12 @@ export async function saveProductAction(_prev: AdminFormState, formData: FormDat
   redirect(productId ? `/admin/products/${savedId}?saved=${Date.now()}` : `/admin/products/${savedId}?created=1`);
 }
 
-export async function deleteProductAction(formData: FormData): Promise<void> {
+/** Hides a product from the website (status ARCHIVED). Products are never deleted. */
+export async function hideProductAction(formData: FormData): Promise<void> {
   await requireAdmin();
-  const result = await deleteProduct(id.parse(formData.get("id")));
+  await prisma.product.update({ where: { id: id.parse(formData.get("id")) }, data: { status: "ARCHIVED" } });
   updateTag(CATALOG_TAG);
-  redirect(`/admin/products?${result}=1`);
+  redirect("/admin/products?hidden=1");
 }
 
 // ─── Product images (called directly from the image manager) ────────────────
@@ -146,13 +147,6 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
   return { ok: true, savedAt: Date.now() };
 }
 
-export async function deleteCategoryAction(categoryId: string): Promise<AdminResult> {
-  await requireAdmin();
-  const result = await run(() => deleteCategory(id.parse(categoryId)));
-  if (!result.error) catalogChanged();
-  return result;
-}
-
 export async function categoryCommandAction(
   categoryId: string,
   command: "up" | "down" | "show" | "hide" | "remove-image",
@@ -179,4 +173,30 @@ export async function uploadCategoryImageAction(formData: FormData): Promise<Adm
   });
   if (!result.error) catalogChanged();
   return result;
+}
+
+// ─── AI images (OpenAI, key from IMAGE_API_KEY on the server) ───────────────
+
+export async function generateProductImageAction(productId: string, view: ImageView, replaceImageId?: string): Promise<AdminResult> {
+  await requireAdmin();
+  try {
+    await generateProductImage(id.parse(productId), z.enum(["front", "angle", "in-use"]).parse(view), replaceImageId ? id.parse(replaceImageId) : undefined);
+  } catch (error) {
+    if (error instanceof ImageGenerationError) return { error: error.message };
+    throw error;
+  }
+  catalogChanged();
+  return {};
+}
+
+export async function generateCategoryImageAction(categoryId: string): Promise<AdminResult> {
+  await requireAdmin();
+  try {
+    await generateCategoryImage(id.parse(categoryId));
+  } catch (error) {
+    if (error instanceof ImageGenerationError) return { error: error.message };
+    throw error;
+  }
+  catalogChanged();
+  return {};
 }

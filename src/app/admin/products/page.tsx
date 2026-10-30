@@ -27,7 +27,7 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
           Add product
         </Link>
       </div>
-      {params.deleted && <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-300" role="status">Product deleted.</p>}
+      {params.hidden && <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-300" role="status">Product hidden from the website (status Archived).</p>}
       {params.archived && (
         <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300" role="status">
           This product has orders, so it was archived instead of deleted. It is hidden from the store.

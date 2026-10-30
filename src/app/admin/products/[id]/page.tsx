@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { deleteProductAction } from "@/app/admin/actions";
+import { hideProductAction } from "@/app/admin/actions";
 import { ImageManager } from "@/components/admin/image-manager";
 import { ProductEditor } from "@/components/admin/product-editor";
 import { getAdminProduct } from "@/lib/admin/catalog-service";
 import { categoryChoices, toProductInput } from "@/lib/admin/editor-data";
 import { requireStaff } from "@/lib/auth/session";
+
+// AI image generation can take up to a minute.
+export const maxDuration = 120;
 
 export const metadata = { title: "Edit product" };
 
@@ -49,18 +52,18 @@ export default async function EditProductPage({ params, searchParams }: PageProp
           categories={categories}
           imageCount={product.images.length}
         />
-        <section className="card border-red-200 p-5 dark:border-red-900">
-          <h2 className="font-bold text-red-700 dark:text-red-400">Delete product</h2>
-          <p className="mt-1 text-sm text-muted">
-            Products that have been ordered are archived instead, so order history stays intact.
-          </p>
-          <form action={deleteProductAction} className="mt-3">
-            <input type="hidden" name="id" value={product.id} />
-            <button className="btn border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950">
-              Delete product
-            </button>
-          </form>
-        </section>
+        {product.status !== "ARCHIVED" && (
+          <section className="card p-5">
+            <h2 className="font-bold">Hide product</h2>
+            <p className="mt-1 text-sm text-muted">
+              Hides the product from the website (status “Archived”). Nothing is deleted: set the status back to Published to show it again.
+            </p>
+            <form action={hideProductAction} className="mt-3">
+              <input type="hidden" name="id" value={product.id} />
+              <button className="btn-secondary">Hide product</button>
+            </form>
+          </section>
+        )}
       </div>
     </>
   );
