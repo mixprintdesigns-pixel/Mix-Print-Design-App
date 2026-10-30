@@ -1,13 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
 import { BUSINESS, quoteLink, whatsappLink } from "@/lib/business";
+import { CategoryCard } from "@/components/catalog/category-card";
+import { getCategoryTree } from "@/lib/catalog/queries";
+import { serviceUrl } from "@/lib/catalog/tree";
 import { getAboutContent } from "@/lib/content/about";
+import { getVisibleTeam } from "@/lib/content/team";
 import { pageMetadata } from "@/lib/content/seo-pages";
 
 export const generateMetadata = () => pageMetadata("about");
 
 export default async function AboutPage() {
-  const about = await getAboutContent();
+  const [about, team, services] = await Promise.all([getAboutContent(), getVisibleTeam(), getCategoryTree()]);
+  const initials = (name: string) =>
+    name
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
   return (
     <>
       <section className="border-b border-border bg-surface">
@@ -17,6 +28,12 @@ export default async function AboutPage() {
             Printing and signage from the heart of <span className="text-brand">Lahore</span>.
           </h1>
           <p className="mt-3 text-muted">{BUSINESS.address}</p>
+          {about.yearsExperience && (
+            <p className="mt-6 inline-flex items-baseline gap-2 rounded-xl bg-brand/10 px-4 py-3" data-testid="years-experience">
+              <span className="text-3xl font-black text-brand">{about.yearsExperience}</span>
+              <span className="text-sm font-semibold">years of experience</span>
+            </p>
+          )}
         </div>
       </section>
 
@@ -26,29 +43,32 @@ export default async function AboutPage() {
             Our story
           </h2>
           <div className="mt-3 space-y-4 whitespace-pre-line leading-relaxed text-muted">{about.story}</div>
-          <div className="card mt-8 border-l-4 border-l-brand p-6">
-            <h2 className="text-lg font-bold">Our mission</h2>
-            <p className="mt-2 leading-relaxed">{about.mission}</p>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="card border-l-4 border-l-brand p-6">
+              <h2 className="text-lg font-bold">Our mission</h2>
+              <p className="mt-2 leading-relaxed">{about.mission}</p>
+            </div>
+            {about.vision && (
+              <div className="card border-l-4 border-l-accent p-6">
+                <h2 className="text-lg font-bold">Our vision</h2>
+                <p className="mt-2 leading-relaxed">{about.vision}</p>
+              </div>
+            )}
           </div>
         </section>
 
         <section className="card h-fit overflow-hidden" aria-labelledby="owner-heading">
           <div className="relative aspect-[4/3] bg-gradient-to-br from-brand/20 to-accent/20">
             {about.ownerPhotoUrl ? (
-              <Image src={about.ownerPhotoUrl} alt={about.ownerName} fill sizes="(min-width: 1024px) 40vw, 100vw" className="object-cover" />
+              <Image src={about.ownerPhotoUrl} alt={`${about.ownerName}, ${about.ownerTitle || "CEO"} of Mix Print Design`} fill sizes="(min-width: 1024px) 40vw, 100vw" className="object-cover" />
             ) : (
               <span className="grid h-full place-items-center text-6xl font-black text-white/90" aria-hidden>
-                {about.ownerName
-                  .split(/\s+/)
-                  .map((w) => w[0])
-                  .join("")
-                  .slice(0, 2)
-                  .toUpperCase()}
+                {initials(about.ownerName)}
               </span>
             )}
           </div>
           <div className="p-6">
-            <p className="text-xs font-semibold uppercase tracking-widest text-accent">Meet the owner</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-accent">Message from our CEO</p>
             <h2 id="owner-heading" className="mt-1 text-xl font-bold">
               {about.ownerName}
             </h2>
@@ -57,6 +77,19 @@ export default async function AboutPage() {
           </div>
         </section>
       </div>
+
+      {services.length > 0 && (
+        <section className="mx-auto max-w-6xl px-4 pb-12" aria-labelledby="services-overview-heading">
+          <h2 id="services-overview-heading" className="text-2xl font-bold">
+            What we do
+          </h2>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {services.map((s, i) => (
+              <CategoryCard key={s.id} category={s} href={serviceUrl(s.path)} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="mx-auto max-w-6xl px-4 pb-6" aria-labelledby="why-heading">
         <h2 id="why-heading" className="text-2xl font-bold">
@@ -74,6 +107,33 @@ export default async function AboutPage() {
           ))}
         </ul>
       </section>
+
+      {team.length > 0 && (
+        <section className="mx-auto max-w-6xl px-4 pt-10" aria-labelledby="team-heading">
+          <h2 id="team-heading" className="text-2xl font-bold">
+            Our team
+          </h2>
+          <ul className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {team.map((m) => (
+              <li key={m.id} className="card overflow-hidden text-center" data-testid="team-member">
+                <div className="relative aspect-square bg-gradient-to-br from-brand/20 to-accent/20">
+                  {m.photoUrl ? (
+                    <Image src={m.photoUrl} alt={`${m.name}, ${m.designation || "team member"} at Mix Print Design`} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover" />
+                  ) : (
+                    <span className="grid h-full place-items-center text-4xl font-black text-white/90" aria-hidden>
+                      {initials(m.name)}
+                    </span>
+                  )}
+                </div>
+                <div className="p-4">
+                  <h3 className="font-semibold">{m.name}</h3>
+                  {m.designation && <p className="text-sm text-muted">{m.designation}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="mx-auto max-w-6xl px-4 pt-8">
         <div className="card flex flex-col items-start justify-between gap-4 bg-gradient-to-br from-brand/10 to-accent/10 p-6 sm:flex-row sm:items-center">

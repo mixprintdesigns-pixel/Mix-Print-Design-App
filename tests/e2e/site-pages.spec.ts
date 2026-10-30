@@ -186,8 +186,10 @@ test.describe("about page", () => {
     const run = Date.now().toString(36);
     const admin = await adminPage(browser);
     await admin.goto("/admin/about");
-    await admin.getByLabel("Owner name").fill(`Owner ${run}`);
-    await admin.getByLabel("Short bio").fill("Twenty years of printing experience in Lahore.");
+    await admin.getByLabel("CEO name").fill(`Owner ${run}`);
+    await admin.getByLabel("Message from the CEO").fill("Twenty years of printing experience in Lahore.");
+    await admin.getByLabel("Years of experience").fill("20+");
+    await admin.getByLabel("Our vision").fill("To be the most trusted printing partner in Lahore.");
     await admin.getByLabel("Highlight 1 title").fill(`Fast turnaround ${run}`);
     await admin.getByRole("button", { name: "Save About page" }).click();
     await expect(admin.getByText("About page saved.")).toBeVisible();
@@ -196,6 +198,23 @@ test.describe("about page", () => {
     await expect(page.getByRole("heading", { name: `Owner ${run}` })).toBeVisible();
     await expect(page.getByText("Twenty years of printing experience in Lahore.")).toBeVisible();
     await expect(page.getByRole("heading", { name: `Fast turnaround ${run}` })).toBeVisible();
+    await expect(page.getByTestId("years-experience")).toContainText("20+");
+    await expect(page.getByRole("heading", { name: "Our vision" })).toBeVisible();
+
+    // Team: add a member in admin; it appears in the team grid; hiding removes it.
+    const add = admin.getByTestId("admin-team-member").filter({ hasText: "Add a team member" });
+    await add.getByLabel("Name", { exact: true }).fill(`Designer ${run}`);
+    await add.getByLabel("Designation").fill("Graphic Designer");
+    await add.getByRole("button", { name: "Add team member" }).click();
+    const member = admin.getByTestId("admin-team-member").filter({ has: admin.getByRole("heading", { name: `Designer ${run}` }) });
+    await expect(member).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("team-member").filter({ hasText: `Designer ${run}` })).toContainText("Graphic Designer");
+    await member.getByLabel("Show on the About page").uncheck();
+    await member.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(member.getByText("Team member saved.")).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("team-member").filter({ hasText: `Designer ${run}` })).toHaveCount(0);
   });
 });
 

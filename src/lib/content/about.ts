@@ -8,6 +8,9 @@ export const CONTENT_TAG = "site-content";
 export const aboutSchema = z.object({
   story: z.string().trim().min(10, "Write at least a few sentences.").max(4000),
   mission: z.string().trim().min(10, "Write at least one sentence.").max(1000),
+  // Added later: defaults keep previously saved About content valid.
+  vision: z.string().trim().max(1000).default(""),
+  yearsExperience: z.string().trim().max(20).default(""),
   ownerName: z.string().trim().min(2, "Enter the owner's name.").max(100),
   ownerTitle: z.string().trim().max(100),
   ownerBio: z.string().trim().max(1500),
@@ -25,6 +28,9 @@ export const DEFAULT_ABOUT: AboutContent = {
     "Mix Print Design is a printing and signage studio on Raiwind Road, Lahore. We help shops, startups, schools and brands look their best, from a box of business cards to a full backlit shop front.\n\nEvery job is checked by our design team, and nothing goes to print until you approve a proof.",
   mission:
     "To make professional printing simple, honest and affordable for every business in Pakistan, with clear prices, quality you can see, and service you can reach on WhatsApp.",
+  vision:
+    "To be the most trusted printing and signage partner in Lahore, known for premium quality, on-time delivery and friendly service across Pakistan.",
+  yearsExperience: "",
   ownerName: "Owner name",
   ownerTitle: "Founder, Mix Print Design",
   ownerBio: "Add a short introduction here: experience in printing, what you are proud of, and why customers trust you.",

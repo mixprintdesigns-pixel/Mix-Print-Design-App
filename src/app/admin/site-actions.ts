@@ -11,6 +11,8 @@ import { setMessageHandled } from "@/lib/contact/service";
 import { aboutSchema, CONTENT_TAG, getAboutContent, saveAboutContent } from "@/lib/content/about";
 import { saveSeoPages, SEO_PAGES, seoPagesSchema, type SeoPageKey } from "@/lib/content/seo-pages";
 import { saveSiteSettings, siteSettingsSchema } from "@/lib/content/site-settings";
+import { moveTeamMember, readTeam, saveTeamMember, teamMemberSchema } from "@/lib/content/team";
+import { descriptiveKey, toWebp } from "@/lib/storage/webp";
 import { newKey, saveFile } from "@/lib/storage";
 import { checkImage } from "@/lib/storage/images";
 
@@ -71,6 +73,8 @@ export async function saveAboutAction(_prev: ActionState, data: FormData): Promi
   const parsed = aboutSchema.safeParse({
     story: data.get("story"),
     mission: data.get("mission"),
+    vision: data.get("vision") ?? "",
+    yearsExperience: data.get("yearsExperience") ?? "",
     ownerName: data.get("ownerName"),
     ownerTitle: data.get("ownerTitle") ?? "",
     ownerBio: data.get("ownerBio") ?? "",
@@ -84,6 +88,45 @@ export async function saveAboutAction(_prev: ActionState, data: FormData): Promi
   updateTag(CONTENT_TAG);
   refresh();
   return { message: "About page saved." };
+}
+
+// ─── Team members (About page) ───────────────────────────────────────────────
+
+export async function saveTeamMemberAction(_prev: ActionState, data: FormData): Promise<ActionState> {
+  await requireStaff(["ADMIN"]);
+  const memberId = data.get("id") ? id.parse(data.get("id")) : undefined;
+  const current = memberId ? (await readTeam()).find((m) => m.id === memberId) : undefined;
+  if (memberId && !current) return { error: "This team member no longer exists." };
+
+  let photoUrl = current?.photoUrl ?? "";
+  const photo = data.get("photo");
+  const name = String(data.get("name") ?? "");
+  if (photo instanceof File && photo.size > 0) {
+    const image = await toWebp(new Uint8Array(await photo.arrayBuffer()), 800);
+    if (!image.ok) return { error: image.error };
+    photoUrl = (await saveFile(descriptiveKey("team", `${name || "team-member"} mix print design`, image.ext), image.bytes, image.type)).url;
+  }
+  const parsed = teamMemberSchema.omit({ id: true, sortOrder: true }).safeParse({
+    name,
+    designation: String(data.get("designation") ?? ""),
+    photoUrl,
+    isVisible: memberId ? data.get("isVisible") === "on" : true,
+  });
+  if (!parsed.success) return { error: firstIssue(parsed.error) };
+  await saveTeamMember({ ...parsed.data, id: memberId });
+  updateTag(CONTENT_TAG);
+  refresh();
+  return { message: memberId ? "Team member saved." : "Team member added." };
+}
+
+export async function teamCommandAction(_prev: ActionState, data: FormData): Promise<ActionState> {
+  await requireStaff(["ADMIN"]);
+  const memberId = id.parse(data.get("id"));
+  const command = z.enum(["up", "down"]).parse(data.get("command"));
+  await moveTeamMember(memberId, command);
+  updateTag(CONTENT_TAG);
+  refresh();
+  return { message: "Order saved." };
 }
 
 // ─── SEO for fixed pages ─────────────────────────────────────────────────────
