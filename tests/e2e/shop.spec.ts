@@ -17,7 +17,7 @@ test("browse catalog, filter and search", async ({ page }) => {
   await expect(page.getByRole("link", { name: /Die-cut Stickers/ })).toBeVisible();
   // The category tree expands: main service → category; a parent includes its sub-categories' products.
   const tree = page.getByRole("navigation", { name: "Categories" });
-  for (const service of ["Board Maker", "Offset Printing", "Digital Printing", "Customized Printing"]) {
+  for (const service of ["Sign Board Maker", "Offset Printing", "Digital Printing", "Customized Printing"]) {
     await expect(tree.getByRole("link", { name: new RegExp(`^${service} \\(\\d+\\)$`) })).toBeVisible();
   }
   await tree.getByRole("link", { name: /^Offset Printing/ }).click();

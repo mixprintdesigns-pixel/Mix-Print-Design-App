@@ -13,7 +13,7 @@ export function Breadcrumbs({ items, className = "" }: { items: Crumb[]; classNa
         <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           {trail.map((item, i) => (
             <li key={item.href} className="flex items-center gap-1.5">
-              {i > 0 && <span aria-hidden>/</span>}
+              {i > 0 && <span aria-hidden>›</span>}
               {i === trail.length - 1 ? (
                 <span aria-current="page" className="font-medium text-foreground">
                   {item.name}

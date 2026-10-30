@@ -15,7 +15,7 @@ export function QuoteButtons({ subject, compact = false }: { subject: string; co
         rel="noopener noreferrer"
         className={`btn border border-green-600 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950 ${size}`}
       >
-        WhatsApp<span className="sr-only"> about {subject}</span>
+        Order on WhatsApp<span className="sr-only"> about {subject}</span>
       </a>
     </div>
   );
