@@ -12,6 +12,8 @@ const LEGACY_CATEGORY_PATHS: Record<string, string> = {
 };
 
 export function proxy(request: NextRequest) {
+  // Orders go through WhatsApp; the cart page is switched off (its code and data are kept).
+  if (request.nextUrl.pathname === "/cart") return NextResponse.redirect(new URL("/products", request.url), 307);
   const category = request.nextUrl.searchParams.get("category");
   if (category === null) return NextResponse.next();
   const url = request.nextUrl.clone();
@@ -20,4 +22,4 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(url, 301);
 }
 
-export const config = { matcher: "/products" };
+export const config = { matcher: ["/products", "/cart"] };

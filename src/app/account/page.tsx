@@ -48,9 +48,6 @@ async function AccountOverview() {
           </Link>
         </div>
       </div>
-      <Link href="/cart" className="btn-secondary mt-8">
-        View cart
-      </Link>
     </>
   );
 }

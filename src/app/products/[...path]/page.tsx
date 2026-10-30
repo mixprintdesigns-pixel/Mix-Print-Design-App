@@ -210,6 +210,8 @@ async function ProductView({ product, category, tree, canonical }: { product: Pr
           </p>
           {product.isAvailable ? (
             <ProductConfigurator
+              productName={product.name}
+              productUrl={absoluteUrl(canonical)}
               product={{
                 id: product.id,
                 basePriceMinor: product.basePriceMinor,

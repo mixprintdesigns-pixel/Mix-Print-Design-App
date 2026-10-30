@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getCurrentCartCount } from "@/lib/cart/session";
 import { logoutAction } from "@/app/actions/auth";
 import { BrandLogo } from "@/components/brand-logo";
 import { MobileMenu, type NavLink } from "@/components/mobile-menu";
@@ -9,11 +8,11 @@ import { MobileMenu, type NavLink } from "@/components/mobile-menu";
 // Site pages, shown in the header on large screens and in the menu on phones/tablets.
 const PAGES: NavLink[] = [
   { href: "/", label: "Home" },
-  { href: "/products", label: "Products" },
   { href: "/services", label: "Services" },
+  { href: "/products", label: "Products" },
+  { href: "/affiliate", label: "Affiliate Program" },
   { href: "/about", label: "About Us" },
   { href: "/contact", label: "Contact Us" },
-  { href: "/affiliate", label: "Earn with us" },
 ];
 
 export function SiteHeader() {
@@ -43,7 +42,7 @@ export function SiteHeader() {
 }
 
 async function HeaderSession() {
-  const [user, cartCount] = await Promise.all([getCurrentUser(), getCurrentCartCount()]);
+  const user = await getCurrentUser();
   return (
     <>
       {user ? (
@@ -65,15 +64,6 @@ async function HeaderSession() {
           Sign in
         </Link>
       )}
-      <Link href="/cart" className="btn-secondary py-2" aria-label={`Cart, ${cartCount} items`}>
-        Cart
-        <span
-          data-testid="cart-count"
-          className="rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-white"
-        >
-          {cartCount}
-        </span>
-      </Link>
     </>
   );
 }

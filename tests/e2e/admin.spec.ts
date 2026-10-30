@@ -131,7 +131,7 @@ test.describe("admin catalog management", () => {
     await page.goto("/products/offset-printing");
     await expect(page.getByTestId("product-card").filter({ hasText: productName })).toBeVisible();
 
-    // Customer view: subcategory, gallery, price, cart
+    // Customer view: subcategory, gallery, price, WhatsApp order
     await page.goto("/products/offset-printing/stickers-labels");
     await page.getByRole("navigation", { name: "Stickers & Labels types" }).getByRole("link", { name: new RegExp(categoryName) }).click();
     await page.getByRole("link", { name: new RegExp(productName) }).click();
@@ -146,17 +146,10 @@ test.describe("admin catalog management", () => {
     await page.getByLabel("Quantity").fill("200");
     // (4 + 2) × 200 = 1,200 − 10% = 1,080 + 500 plate
     await expect(total).toHaveText("PKR 1,580");
-    await page.getByRole("button", { name: "Add to cart" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Added to your cart" })).toBeVisible();
-
-    await page.goto("/cart");
-    const line = page.getByTestId("cart-lines").getByRole("listitem").filter({ hasText: productName });
-    await expect(line.getByTestId("line-total")).toContainText("PKR 1,580");
-    await line.getByText("Change options").click();
-    await line.getByLabel("Size").selectOption({ label: "Small" });
-    await line.getByRole("button", { name: "Save options" }).click();
-    // 4 × 200 = 800 − 10% = 720 + 500
-    await expect(line.getByTestId("line-total")).toContainText("PKR 1,220");
+    const href = decodeURIComponent((await page.getByTestId("order-whatsapp").getAttribute("href"))!);
+    expect(href).toContain(`*${productName}*`);
+    expect(href).toContain("Size: Large");
+    expect(href).toContain("Price shown: PKR 1,580");
   });
 
   test("customers cannot open the admin area", async ({ page }) => {

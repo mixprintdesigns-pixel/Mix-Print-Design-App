@@ -281,14 +281,14 @@ test.describe("AI chat assistant", () => {
 test.describe("navigation", () => {
   const pages = [
     ["Home", /\/$/],
-    ["Products", /\/products$/],
     ["Services", /\/services$/],
+    ["Products", /\/products$/],
+    ["Affiliate Program", /\/affiliate$/],
     ["About Us", /\/about$/],
     ["Contact Us", /\/contact$/],
-    ["Earn with us", /\/affiliate$/],
   ] as const;
 
-  test("the header shows exactly the six main pages", async ({ page, isMobile }) => {
+  test("the header shows exactly the six main pages, in order", async ({ page, isMobile }) => {
     await page.goto("/");
     const nav = isMobile ? page.getByRole("navigation", { name: "Mobile" }) : page.getByRole("navigation", { name: "Main" });
     if (isMobile) await page.getByRole("button", { name: "Open menu" }).click();

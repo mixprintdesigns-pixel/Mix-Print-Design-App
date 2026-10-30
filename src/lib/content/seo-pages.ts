@@ -44,7 +44,7 @@ export const SEO_PAGES = {
     description: "Call or WhatsApp +92 303 488 9255, email mixprintdesigns@gmail.com or visit us on Raiwind Road, Lahore for a printing or sign board quote.",
   },
   affiliate: {
-    label: "Earn with us",
+    label: "Affiliate Program",
     path: "/affiliate",
     title: "Earn with Mix Print Design | Printing Affiliate Program Pakistan",
     description: "Join the Mix Print Design affiliate program: share your link and earn commission on printing orders, paid to JazzCash, Easypaisa or bank.",

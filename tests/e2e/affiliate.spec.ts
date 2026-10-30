@@ -42,7 +42,7 @@ test("home page promotes the affiliate program", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("commission");
   // In the header on large screens, in the menu on phones
   if (await page.getByRole("button", { name: "Open menu" }).isVisible()) await page.getByRole("button", { name: "Open menu" }).click();
-  await expect(page.getByRole("link", { name: "Earn with us" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Affiliate Program", exact: true })).toBeVisible();
 });
 
 test.describe("affiliate journey", () => {

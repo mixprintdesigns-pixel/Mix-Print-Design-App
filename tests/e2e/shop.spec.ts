@@ -53,45 +53,32 @@ test("product gallery and live price", async ({ page }) => {
 
   await page.getByLabel("Quantity").fill("150");
   await expect(page.getByRole("main").getByRole("alert")).toHaveText(/steps of 100/);
-  await expect(page.getByRole("button", { name: "Add to cart" })).toBeDisabled();
+  await expect(page.getByTestId("order-whatsapp")).toHaveCount(0); // no order link while the quantity is invalid
 });
 
-test("guest cart: add, update, remove", async ({ page }) => {
+test("orders go to WhatsApp with the chosen options; the cart is switched off", async ({ page, request }) => {
   await openBusinessCards(page);
   await page.getByText("Front & back").click();
-  await page.getByRole("button", { name: "Add to cart" }).click();
-  await expect(page.getByRole("status")).toContainText("Added to your cart");
-  await expect(page.getByTestId("cart-count")).toHaveText("1");
+  await page.getByLabel("Quantity").fill("500");
+  await page.getByLabel(/Notes for our team/).fill("Logo on both sides");
+  const order = page.getByTestId("order-whatsapp");
+  await expect(order).toHaveText("Order on WhatsApp");
+  const href = decodeURIComponent((await order.getAttribute("href"))!);
+  expect(href).toMatch(/^https:\/\/wa\.me\/923034889255\?text=/);
+  for (const text of ["*Standard Business Cards*", "Printed sides: Front & back", "Quantity: 500", "Notes: Logo on both sides"]) expect(href).toContain(text);
+  expect(href).toContain("/products/offset-printing/business-cards/standard-business-cards");
 
-  await page.goto("/cart");
-  await expect(page.getByTestId("cart-lines").getByRole("listitem")).toHaveCount(1);
-  await expect(page.getByText("Printed sides: Front & back")).toBeVisible();
-  await expect(page.getByTestId("cart-subtotal")).toHaveText("PKR 400"); // 100 × (3.00 + 1.00)
-
-  await page.getByLabel("Qty").fill("1000");
-  await page.getByRole("button", { name: "Update" }).click();
-  await expect(page.getByTestId("cart-subtotal")).toHaveText("PKR 3,000"); // 1000 × (2.00 + 1.00)
-
-  // The browser blocks below-minimum quantities; the server re-checks (see integration tests).
-  await page.getByLabel("Qty").fill("50");
-  await page.getByRole("button", { name: "Update" }).click();
-  expect(await page.getByLabel("Qty").evaluate((el: HTMLInputElement) => el.validity.rangeUnderflow)).toBe(true);
-  await expect(page.getByTestId("cart-subtotal")).toHaveText("PKR 3,000");
-
-  await page.getByRole("button", { name: "Remove" }).click();
-  await expect(page.getByText("Your cart is empty.")).toBeVisible();
-  await expect(page.getByTestId("cart-count")).toHaveText("0");
+  await expect(page.locator("header").getByRole("link", { name: /Cart/ })).toHaveCount(0);
+  const cart = await request.get("/cart", { maxRedirects: 0 });
+  expect(cart.status()).toBe(307);
+  expect(cart.headers()["location"]).toMatch(/\/products$/);
 });
 
-test("register keeps the guest cart, then sign out and sign back in", async ({ page }) => {
+test("register, sign out and sign back in", async ({ page }) => {
   const email = uniqueEmail();
   const password = "MixPrint2026!";
 
-  await openBusinessCards(page);
-  await page.getByRole("button", { name: "Add to cart" }).click();
-  await expect(page.getByTestId("cart-count")).toHaveText("1");
-
-  await page.goto("/register?next=/cart");
+  await page.goto("/register");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText("Enter your full name.")).toBeVisible();
 
@@ -100,13 +87,10 @@ test("register keeps the guest cart, then sign out and sign back in", async ({ p
   await page.getByLabel(/Mobile number/).fill("0321 7654321");
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-
-  await expect(page).toHaveURL(/\/cart$/);
-  await expect(page.getByTestId("cart-lines").getByRole("listitem")).toHaveCount(1);
+  await expect(page).toHaveURL(/\/account$/);
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
-  await expect(page.getByTestId("cart-count")).toHaveText("0");
 
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
@@ -118,7 +102,6 @@ test("register keeps the guest cart, then sign out and sign back in", async ({ p
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
-  await expect(page.getByTestId("cart-count")).toHaveText("1");
 });
 
 test("account page requires sign in", async ({ page }) => {

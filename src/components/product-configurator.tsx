@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
-import { addToCartAction, type CartActionState } from "@/app/actions/cart";
+import { useMemo, useState } from "react";
+import { whatsappLink } from "@/lib/business";
 import { formatPKR } from "@/lib/money";
 import {
   formatPercent,
@@ -13,14 +12,15 @@ import {
   type ProductPricingInput,
 } from "@/lib/pricing";
 
-type Props = { product: ProductPricingInput & { id: string } };
+type Props = { product: ProductPricingInput & { id: string }; productName: string; productUrl: string };
 
-export function ProductConfigurator({ product }: Props) {
+/** Options, quantity and live price; the order is sent to us on WhatsApp with everything filled in. */
+export function ProductConfigurator({ product, productName, productUrl }: Props) {
   const [selected, setSelected] = useState<Record<string, string>>(() =>
     Object.fromEntries(product.options.map((o) => [o.id, o.values[0]?.id ?? ""])),
   );
   const [quantity, setQuantity] = useState(product.minQuantity);
-  const [state, formAction, pending] = useActionState<CartActionState, FormData>(addToCartAction, {});
+  const [notes, setNotes] = useState("");
 
   // Same pricing code as the server; the server recalculates and is the source of truth.
   const quote = useMemo((): { error: string } | (LinePrice & { error: null }) => {
@@ -31,10 +31,18 @@ export function ProductConfigurator({ product }: Props) {
     return { ...linePrice(product, resolved.selection, quantity), error: null };
   }, [product, selected, quantity]);
 
-  return (
-    <form action={formAction} className="card mt-6 space-y-5 p-5">
-      <input type="hidden" name="productId" value={product.id} />
+  const orderMessage = [
+    "Assalam o Alaikum! I'd like to order:",
+    `*${productName}*`,
+    ...product.options.map((o) => `${o.name}: ${o.values.find((v) => v.id === selected[o.id])?.label ?? "-"}`),
+    `Quantity: ${quantity}`,
+    ...(quote.error === null ? [`Price shown: ${formatPKR(quote.lineTotalMinor)}`] : []),
+    ...(notes.trim() ? [`Notes: ${notes.trim()}`] : []),
+    productUrl,
+  ].join("\n");
 
+  return (
+    <div className="card mt-6 space-y-5 p-5">
       {product.options.map((option) => (
         <fieldset key={option.id}>
           <legend className="label">{option.name}</legend>
@@ -67,7 +75,6 @@ export function ProductConfigurator({ product }: Props) {
               );
             })}
           </div>
-          <input type="hidden" name="optionValueId" value={selected[option.id]} />
         </fieldset>
       ))}
 
@@ -96,7 +103,7 @@ export function ProductConfigurator({ product }: Props) {
         <label htmlFor="notes" className="label">
           Notes for our team <span className="font-normal text-muted">(optional)</span>
         </label>
-        <textarea id="notes" name="notes" rows={2} maxLength={500} className="input" />
+        <textarea id="notes" name="notes" rows={2} maxLength={500} className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
 
       <div className="flex items-end justify-between border-t border-border pt-4">
@@ -120,21 +127,19 @@ export function ProductConfigurator({ product }: Props) {
             </p>
           </div>
         )}
-        <button className="btn-primary" disabled={pending || quote.error !== null}>
-          {pending ? "Adding…" : "Add to cart"}
-        </button>
+        {quote.error === null ? (
+          <a href={whatsappLink(orderMessage)} target="_blank" rel="noopener noreferrer" className="btn-primary" data-testid="order-whatsapp">
+            Order on WhatsApp
+          </a>
+        ) : (
+          <span className="btn-primary pointer-events-none opacity-50" aria-disabled>
+            Order on WhatsApp
+          </span>
+        )}
       </div>
-
-      {state.error && (
-        <p className="field-error" role="alert">
-          {state.error}
-        </p>
-      )}
-      {state.ok && !pending && (
-        <p className="text-sm text-green-700 dark:text-green-400" role="status">
-          Added to your cart. <Link href="/cart" className="font-semibold underline">View cart</Link>
-        </p>
-      )}
-    </form>
+      <p className="text-xs text-muted">
+        WhatsApp opens with your order details. We confirm the price, artwork and delivery with you there.
+      </p>
+    </div>
   );
 }
