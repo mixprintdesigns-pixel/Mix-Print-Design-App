@@ -82,7 +82,12 @@ export async function approveDueCommissionsAction(_prev: ActionState): Promise<A
 
 export async function markWithdrawalPaidAction(_prev: ActionState, data: FormData): Promise<ActionState> {
   return adminOnly(async () => {
-    await markWithdrawalPaid(id.parse(data.get("withdrawalId")), text(data, "transactionRef"));
+    const paidAt = text(data, "paidAt");
+    const method = z.enum(["JAZZCASH", "EASYPAISA", "BANK_TRANSFER"]).optional().parse(text(data, "paidMethod") || undefined);
+    await markWithdrawalPaid(id.parse(data.get("withdrawalId")), text(data, "transactionRef"), {
+      paidAt: paidAt ? new Date(`${paidAt}T12:00:00+05:00`) : undefined,
+      method,
+    });
     return "Marked as paid.";
   });
 }

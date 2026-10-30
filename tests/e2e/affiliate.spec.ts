@@ -129,11 +129,12 @@ test.describe("affiliate journey", () => {
     await expect(withdrawal).toContainText(mobile.e164);
     admin.once("dialog", (d) => d.accept());
     await withdrawal.getByLabel("Transaction reference").fill(`JC-${run}`);
+    await withdrawal.getByLabel("Paid by").selectOption("EASYPAISA");
     await withdrawal.getByRole("button", { name: "Mark as paid" }).click();
     // Paid requests leave the "requested" list and appear under "paid" with the reference.
     await expect(withdrawal).toHaveCount(0);
     await admin.goto("/admin/affiliates/withdrawals?status=PAID");
-    await expect(admin.getByTestId("withdrawal-row").filter({ hasText: affiliateEmail })).toContainText(`ref JC-${run}`);
+    await expect(admin.getByTestId("withdrawal-row").filter({ hasText: affiliateEmail })).toContainText(`by Easypaisa · ref JC-${run}`);
 
     await page.reload();
     await expect(page.getByTestId("withdrawals")).toContainText("paid");

@@ -640,6 +640,7 @@ model AffiliateWithdrawal {
   accountName    String
   status         WithdrawalStatus      @default(REQUESTED)
   transactionRef String? // JazzCash / Easypaisa / bank reference entered by the admin
+  paidMethod     PayoutMethod? // how the payout was actually sent (may differ from the requested method)
   adminNote      String?
   requestedAt    DateTime              @default(now())
   processedAt    DateTime?

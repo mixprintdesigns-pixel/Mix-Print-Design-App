@@ -52,6 +52,18 @@ export default async function AdminWithdrawalsPage({ searchParams }: PageProps<"
                   <ActionForm action={markWithdrawalPaidAction} confirm={`Confirm you have sent ${formatPKR(w.amountMinor)}?`}>
                     <input type="hidden" name="withdrawalId" value={w.id} />
                     <input name="transactionRef" placeholder="Transaction reference" className="input max-w-56 py-1.5 text-xs" aria-label="Transaction reference" />
+                    <input
+                      name="paidAt"
+                      type="date"
+                      defaultValue={new Date().toISOString().slice(0, 10)}
+                      className="input w-auto py-1.5 text-xs"
+                      aria-label="Date paid"
+                    />
+                    <select name="paidMethod" defaultValue={w.method} className="input w-auto py-1.5 text-xs" aria-label="Paid by">
+                      <option value="JAZZCASH">JazzCash</option>
+                      <option value="EASYPAISA">Easypaisa</option>
+                      <option value="BANK_TRANSFER">Bank transfer</option>
+                    </select>
                     <SubmitButton className="btn-primary px-3 py-1.5 text-xs">Mark as paid</SubmitButton>
                   </ActionForm>
                   <ActionForm action={rejectWithdrawalAction}>
@@ -62,7 +74,7 @@ export default async function AdminWithdrawalsPage({ searchParams }: PageProps<"
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-muted">
-                  {w.status === "PAID" ? `Paid ${w.processedAt?.toLocaleDateString("en-PK")} · ref ${w.transactionRef}` : `Rejected: ${w.adminNote}`}
+                  {w.status === "PAID" ? `Paid ${w.processedAt?.toLocaleDateString("en-PK")} by ${({ JAZZCASH: "JazzCash", EASYPAISA: "Easypaisa", BANK_TRANSFER: "bank transfer" })[w.paidMethod ?? w.method]} · ref ${w.transactionRef}` : `Rejected: ${w.adminNote}`}
                 </p>
               )}
             </li>

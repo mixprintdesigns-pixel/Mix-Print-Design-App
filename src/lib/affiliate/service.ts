@@ -287,16 +287,23 @@ export async function requestWithdrawal(userId: string) {
   );
 }
 
-export async function markWithdrawalPaid(withdrawalId: string, transactionRef: string): Promise<void> {
+export async function markWithdrawalPaid(
+  withdrawalId: string,
+  transactionRef: string,
+  details: { paidAt?: Date; method?: PayoutMethodValue } = {},
+): Promise<void> {
   const ref = transactionRef.trim();
+  if (details.paidAt && (Number.isNaN(details.paidAt.getTime()) || details.paidAt.getTime() > Date.now() + 24 * 60 * 60 * 1000)) {
+    throw new AffiliateError("Enter the date the payout was sent (not in the future).", "paidAt");
+  }
   if (ref.length < 3) throw new AffiliateError("Enter the JazzCash / Easypaisa / bank transaction reference.", "transactionRef");
   await prisma.$transaction(async (tx) => {
     const w = await tx.affiliateWithdrawal.findUniqueOrThrow({ where: { id: withdrawalId } });
     if (w.status !== "REQUESTED") throw new AffiliateError("This withdrawal has already been processed.");
-    const now = new Date();
+    const now = details.paidAt ?? new Date();
     await tx.affiliateWithdrawal.update({
       where: { id: w.id },
-      data: { status: "PAID", transactionRef: ref.slice(0, 100), processedAt: now },
+      data: { status: "PAID", transactionRef: ref.slice(0, 100), processedAt: now, paidMethod: details.method ?? w.method },
     });
     await tx.affiliateCommission.updateMany({
       where: { withdrawalId: w.id, status: "APPROVED" },

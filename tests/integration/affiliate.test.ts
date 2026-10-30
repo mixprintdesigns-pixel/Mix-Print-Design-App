@@ -182,7 +182,12 @@ describe("withdrawals", () => {
     expect(stats).toMatchObject({ availableMinor: 0, processingMinor: 200_000, paidMinor: 0 });
 
     await expect(markWithdrawalPaid(w.id, "")).rejects.toThrow(/transaction reference/);
-    await markWithdrawalPaid(w.id, "JC-889911");
+    await expect(markWithdrawalPaid(w.id, "JC-1", { paidAt: new Date(Date.now() + 3 * 86_400_000) })).rejects.toThrow(/not in the future/);
+    await markWithdrawalPaid(w.id, "JC-889911", { paidAt: new Date("2026-10-01T12:00:00+05:00"), method: "BANK_TRANSFER" });
+    expect(await prisma.affiliateWithdrawal.findUniqueOrThrow({ where: { id: w.id } })).toMatchObject({
+      paidMethod: "BANK_TRANSFER",
+      processedAt: new Date("2026-10-01T07:00:00Z"),
+    });
     stats = await getAffiliateStats(affiliate.id);
     expect(stats).toMatchObject({ availableMinor: 0, processingMinor: 0, paidMinor: 200_000, orders: 2 });
     await expect(markWithdrawalPaid(w.id, "again")).rejects.toThrow(/already been processed/);

@@ -20,9 +20,10 @@ async function workCompletedWhatsApp(orderId: string) {
 
 export default async function AdminOrdersPage() {
   await requireStaff();
-  const [orders, products] = await Promise.all([
+  const [orders, products, affiliates] = await Promise.all([
     listRecentOrders(),
     prisma.product.findMany({ where: { status: { not: "ARCHIVED" } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.affiliate.findMany({ where: { status: "APPROVED" }, orderBy: { code: "asc" }, select: { code: true, user: { select: { name: true } } } }),
   ]);
 
   return (
@@ -51,7 +52,14 @@ export default async function AdminOrdersPage() {
           </label>
           <label className="block">
             <span className="label">Affiliate code (optional)</span>
-            <input name="referralCode" className="input uppercase" maxLength={20} placeholder="e.g. AB12CD34" />
+            <input name="referralCode" className="input uppercase" maxLength={20} placeholder="e.g. AB12CD34" list="affiliate-codes" />
+            <datalist id="affiliate-codes">
+              {affiliates.map((a) => (
+                <option key={a.code} value={a.code}>
+                  {a.user.name}
+                </option>
+              ))}
+            </datalist>
           </label>
         </div>
         <fieldset className="space-y-2">
