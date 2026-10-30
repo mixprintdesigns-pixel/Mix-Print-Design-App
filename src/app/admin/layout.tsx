@@ -15,7 +15,7 @@ const sections: { href: string; label: string; ready: boolean }[] = [
   { href: "/admin/seo", label: "SEO", ready: true },
   { href: "/admin/settings", label: "Contact & social", ready: true },
   { href: "/admin/messages", label: "Contact messages", ready: true },
-  { href: "/admin/orders", label: "Orders", ready: false },
+  { href: "/admin/orders", label: "Orders", ready: true },
   { href: "/admin/designs", label: "Design work", ready: false },
   { href: "/admin/customers", label: "Customers", ready: false },
   { href: "/admin/payments", label: "Payments", ready: false },

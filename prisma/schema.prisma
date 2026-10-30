@@ -273,8 +273,11 @@ enum OrderStatus {
 model Order {
   id              String      @id @default(cuid())
   number          String      @unique // human friendly, e.g. MP-260001
-  userId          String
-  user            User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId          String? // null for orders recorded by staff (e.g. WhatsApp orders)
+  user            User?       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  customerName    String? // for orders recorded by staff
+  customerPhone   String?
+  source          String      @default("WEBSITE") // WEBSITE or WHATSAPP
   status          OrderStatus @default(PENDING_PAYMENT)
   currency        String      @default("PKR")
   subtotalMinor   Int

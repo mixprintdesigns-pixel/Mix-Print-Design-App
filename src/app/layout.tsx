@@ -3,6 +3,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import { WhatsAppFloat } from "@/components/whatsapp-float";
+import { WhatsAppReferral } from "@/components/whatsapp-referral";
 import { JsonLd } from "@/components/catalog/json-ld";
 import { localBusinessJsonLd, OPEN_GRAPH_DEFAULTS, SITE_URL } from "@/lib/seo";
 import "./globals.css";
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <main className="flex-1">{children}</main>
         <SiteFooter />
         <WhatsAppFloat />
+        <WhatsAppReferral />
         <ChatWidget />
         <JsonLd data={localBusinessJsonLd()} />
       </body>

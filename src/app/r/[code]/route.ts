@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { safeLandingPath } from "@/lib/affiliate/commission";
-import { REFERRAL_COOKIE } from "@/lib/affiliate/referral-cookie";
+import { REFERRAL_COOKIE, REFERRAL_PUBLIC_COOKIE } from "@/lib/affiliate/referral-cookie";
 import { getAffiliateSettings, recordClick } from "@/lib/affiliate/service";
 
 // Referral links: /r/CODE or /r/CODE?to=/products/business-cards
@@ -18,6 +18,14 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/r/[code]">) 
     const { cookieDays } = await getAffiliateSettings();
     response.cookies.set(REFERRAL_COOKIE, affiliate.code, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: cookieDays * 24 * 60 * 60,
+    });
+    // Not secret: lets WhatsApp order messages include the code for staff to record the order.
+    response.cookies.set(REFERRAL_PUBLIC_COOKIE, affiliate.code, {
+      httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",

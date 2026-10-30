@@ -183,3 +183,36 @@ test("catalog sorting and filters", async ({ page }) => {
   await expect(page).toHaveURL(/sort=name/);
   await expect(page).toHaveURL(/maxDays=2/);
 });
+
+test.describe("WhatsApp orders", () => {
+  test.skip(({ isMobile }) => isMobile, "Admin workflow is covered on desktop");
+
+  test("staff record a WhatsApp order", async ({ page }) => {
+    const run = Date.now().toString(36);
+    await signIn(page, "admin@mixprint.local", "ChangeMe12345");
+    await page.goto("/admin/orders");
+    await page.getByLabel("Customer name").fill(`Customer ${run}`);
+    await page.getByLabel("Phone / WhatsApp").fill("0300 7654321");
+    await page.getByLabel("Item 1 description").fill("Matte business cards");
+    await page.getByLabel("Item 1 quantity").fill("1000");
+    await page.getByLabel("Item 1 total").fill("4500");
+    await page.getByRole("button", { name: "Record order" }).click();
+    await expect(page.getByRole("status").filter({ hasText: /Order MP-\w+ recorded\./ })).toBeVisible();
+    const row = page.getByTestId("admin-order").filter({ hasText: `Customer ${run}` });
+    await expect(row).toContainText("1000 × Matte business cards");
+    await expect(row).toContainText("PKR 4,500");
+    await expect(row).toContainText("WhatsApp");
+  });
+});
+
+test("WhatsApp messages carry the affiliate code of a referred visitor", async ({ page, context }) => {
+  await context.addCookies([{ name: "mp_ref_code", value: "TEST1234", url: "http://localhost:3100" }]);
+  await page.goto("/products/offset-printing/business-cards/standard-business-cards");
+  await page.getByLabel("Quantity").fill("500");
+  await expect
+    .poll(async () => decodeURIComponent((await page.getByTestId("order-whatsapp").getAttribute("href")) ?? ""))
+    .toMatch(/Quantity: 500[\s\S]*Ref: TEST1234$/);
+  await expect
+    .poll(async () => decodeURIComponent((await page.getByTestId("whatsapp-float").getAttribute("href")) ?? ""))
+    .toContain("Ref: TEST1234");
+});

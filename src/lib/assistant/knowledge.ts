@@ -105,7 +105,7 @@ async function pageChunks(): Promise<Chunk[]> {
       sourceId: "ordering",
       title: "How ordering works",
       url: "/products",
-      content: `Choose a product, select size, paper, finish and quantity to see a live price, and add it to the cart. Upload your artwork or ask our designers to create it; nothing is printed until you approve a proof. Online checkout is being finalised: to place an order now, send your cart details through the contact form or WhatsApp ${BUSINESS.phoneDisplay}. Payment options: JazzCash, Easypaisa, bank transfer and cash on delivery. Delivery across Pakistan.`,
+      content: `Choose a product, select size, paper, finish and quantity to see a live price, then press "Order on WhatsApp": WhatsApp opens with your order details for us to confirm (WhatsApp ${BUSINESS.phoneDisplay}). Upload your artwork or ask our designers to create it; nothing is printed until you approve a proof. Payment options: JazzCash, Easypaisa, bank transfer and cash on delivery. Delivery across Pakistan.`,
     },
   ];
 }
