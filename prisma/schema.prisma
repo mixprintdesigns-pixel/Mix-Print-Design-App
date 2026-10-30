@@ -813,3 +813,16 @@ model AffiliateSignup {
   @@index([email])
   @@index([phone])
 }
+
+/// "Forgot password" codes. Only a keyed hash of the code is stored; rows are kept as a record.
+model PasswordReset {
+  id        String    @id @default(cuid())
+  email     String // lower-cased
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, createdAt])
+}

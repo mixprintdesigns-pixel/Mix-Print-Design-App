@@ -1,0 +1,12 @@
+-- "Forgot password": one-time 6-digit codes sent by email. Add-only.
+CREATE TABLE "PasswordReset" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "codeHash" TEXT NOT NULL,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "usedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PasswordReset_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX "PasswordReset_email_createdAt_idx" ON "PasswordReset"("email", "createdAt");
