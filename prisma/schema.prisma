@@ -826,3 +826,82 @@ model PasswordReset {
 
   @@index([email, createdAt])
 }
+
+// ─── Admin sections: Design work, Customers, Payments ────────────────────────
+// Added later as separate tables; orderId / recordedById are plain references, so the
+// existing Order and User tables are not changed.
+
+enum DesignJobStatus {
+  PENDING
+  IN_PROGRESS
+  SENT_FOR_APPROVAL
+  APPROVED
+}
+
+enum DesignProofResponse {
+  WAITING
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+/// An order that needs design work, with the customer's private approval link.
+model DesignJob {
+  id            String          @id @default(cuid())
+  orderId       String          @unique
+  status        DesignJobStatus @default(PENDING)
+  brief         String?
+  approvalToken String          @unique // random; the customer's link is /design-approval/<token>
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([status])
+}
+
+/// A design proof file sent to the customer, and their answer.
+model DesignProofFile {
+  id              String              @id @default(cuid())
+  jobId           String
+  version         Int
+  url             String
+  storageKey      String
+  fileName        String
+  mimeType        String
+  staffNote       String?
+  response        DesignProofResponse @default(WAITING)
+  customerComment String?
+  respondedAt     DateTime?
+  createdAt       DateTime            @default(now())
+
+  @@index([jobId, version])
+}
+
+/// Internal notes about a customer ("u:<userId>" or "p:<last 10 phone digits>" or "e:<email>").
+model CustomerNote {
+  id          String   @id @default(cuid())
+  customerKey String   @unique
+  note        String
+  updatedAt   DateTime @updatedAt
+}
+
+enum ManualPaymentMethod {
+  CASH
+  BANK_TRANSFER
+  JAZZCASH
+  EASYPAISA
+}
+
+/// A payment received against an order, recorded by staff.
+model OrderPaymentRecord {
+  id           String              @id @default(cuid())
+  orderId      String
+  amountMinor  Int
+  method       ManualPaymentMethod
+  reference    String?
+  note         String?
+  receivedAt   DateTime
+  recordedById String?
+  createdAt    DateTime            @default(now())
+
+  @@index([orderId])
+  @@index([receivedAt])
+}

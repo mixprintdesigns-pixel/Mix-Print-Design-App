@@ -16,11 +16,11 @@ const sections: { href: string; label: string; ready: boolean }[] = [
   { href: "/admin/settings", label: "Contact & social", ready: true },
   { href: "/admin/messages", label: "Contact messages", ready: true },
   { href: "/admin/orders", label: "Orders", ready: true },
-  { href: "/admin/designs", label: "Design work", ready: false },
-  { href: "/admin/customers", label: "Customers", ready: false },
-  { href: "/admin/payments", label: "Payments", ready: false },
+  { href: "/admin/designs", label: "Design work", ready: true },
+  { href: "/admin/customers", label: "Customers", ready: true },
+  { href: "/admin/payments", label: "Payments", ready: true },
   { href: "/admin/affiliates", label: "Affiliates & commissions", ready: true },
-  { href: "/admin/reports", label: "Reports", ready: false },
+  { href: "/admin/reports", label: "Reports", ready: true },
 ];
 
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
