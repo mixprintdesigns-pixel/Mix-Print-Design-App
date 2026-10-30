@@ -57,7 +57,7 @@ test.describe("affiliate journey", () => {
     const mobile = randomMobile();
     await register(page, "Sana Malik", affiliateEmail, mobile.local);
     await page.goto("/affiliate");
-    await page.getByRole("link", { name: "Join for free" }).first().click();
+    await page.getByRole("link", { name: "Join Now" }).first().click();
     await expect(page).toHaveURL(/\/affiliate\/join$/);
     await expect(page.getByLabel("Mobile number (Pakistan)")).toHaveValue(mobile.local);
     await expect(page.getByLabel("Wallet mobile number")).toHaveValue(mobile.local);

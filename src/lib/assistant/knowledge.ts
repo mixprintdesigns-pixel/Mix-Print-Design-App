@@ -98,7 +98,7 @@ async function pageChunks(): Promise<Chunk[]> {
       sourceId: "affiliate",
       title: "Affiliate program",
       url: "/affiliate",
-      content: `Earn ${formatPercent(affiliate.defaultRateBps)} commission (some products pay more) on orders from people you refer with your link. Referral window ${affiliate.cookieDays} days. Commission is confirmed ${affiliate.holdDays} days after delivery and cancelled for cancelled or refunded orders. Minimum withdrawal ${formatPKR(affiliate.minWithdrawalMinor)}, paid to JazzCash, Easypaisa or a bank account. No self-referrals. Join free at /affiliate/join; track clicks, orders and earnings in the affiliate dashboard.`,
+      content: `Earn a fixed commission per product (shown in the affiliate dashboard, e.g. Rs 200) or ${formatPercent(affiliate.defaultRateBps)} of product value on orders from people you refer with your link, whether they order on WhatsApp or in the website chat. Referral window ${affiliate.cookieDays} days. Commission is approved when the customer has paid in full, and cancelled for cancelled or refunded orders. Minimum withdrawal ${formatPKR(affiliate.minWithdrawalMinor)}, paid to JazzCash, Easypaisa or a bank account. No self-referrals. Join free at /affiliate/join; track clicks, orders and earnings in the affiliate dashboard.`,
     },
     {
       sourceType: "PAGE",

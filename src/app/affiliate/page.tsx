@@ -22,13 +22,17 @@ export default async function AffiliateLandingPage() {
             Earn <span className="text-brand">{rate} commission</span> on every order you refer.
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-muted">
-            Share your link on Instagram, Facebook, WhatsApp or your website. When someone orders business cards, flyers,
-            banners or packaging within {terms.cookieDays} days, you earn. Get paid to JazzCash, Easypaisa or your bank.
+            Share your link on Instagram, Facebook, WhatsApp or your website. When someone orders sign boards, printing or
+            customized gifts within {terms.cookieDays} days, on WhatsApp or in our chat, you earn. Many products pay a fixed amount
+            in rupees, shown in your dashboard. Get paid to JazzCash, Easypaisa or your bank.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Suspense fallback={<Link href="/affiliate/join" className="btn-primary">Join for free</Link>}>
+            <Suspense fallback={<Link href="/affiliate/join" className="btn-primary">Join Now</Link>}>
               <JoinButton />
             </Suspense>
+            <Link href="/login?next=%2Faffiliate%2Fdashboard" className="btn-secondary">
+              Login
+            </Link>
             <a href="#how" className="btn-secondary">
               How it works
             </a>
@@ -40,10 +44,10 @@ export default async function AffiliateLandingPage() {
         <h2 className="text-2xl font-bold">How it works</h2>
         <ol className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            ["Join", "Create a free account and apply. We review applications quickly."],
-            ["Share", "Copy your personal link, or a link to any product, and share it."],
-            ["Earn", `Customers who order within ${terms.cookieDays} days of clicking earn you ${rate} or more.`],
-            ["Get paid", `Withdraw from ${formatPKR(terms.minWithdrawalMinor)} to JazzCash, Easypaisa or bank.`],
+            ["Join", "Sign up free and verify your email and mobile. We review applications quickly."],
+            ["Copy your link", "Your dashboard lists every product with what you earn and a Copy Link button."],
+            ["Share", `Share on WhatsApp, Facebook, Instagram or TikTok. Visitors are remembered for ${terms.cookieDays} days.`],
+            ["Earn commission", `When the customer has paid in full, your commission is approved. Withdraw from ${formatPKR(terms.minWithdrawalMinor)}.`],
           ].map(([title, text], i) => (
             <li key={title} className="card p-5">
               <span className="text-3xl font-black text-brand">{i + 1}</span>
@@ -59,9 +63,9 @@ export default async function AffiliateLandingPage() {
           <h2 className="text-xl font-bold">Program details</h2>
           <dl className="mt-4 divide-y divide-border text-sm">
             {[
-              ["Commission", `${rate} of product value (some products pay more)`],
+              ["Commission", `A fixed amount per product (e.g. Rs 200), or ${rate} of product value`],
               ["Referral window", `${terms.cookieDays} days from the click (last click wins)`],
-              ["When commission is confirmed", `${terms.holdDays} days after the order is delivered`],
+              ["When commission is approved", "After the customer's full payment (50% advance + 50% balance)"],
               ["Minimum withdrawal", formatPKR(terms.minWithdrawalMinor)],
               ["Payout methods", "JazzCash, Easypaisa, bank transfer (IBAN)"],
             ].map(([k, v]) => (
@@ -99,7 +103,7 @@ async function JoinButton() {
   }
   return (
     <Link href="/affiliate/join" className="btn-primary">
-      Join for free
+      Join Now
     </Link>
   );
 }
