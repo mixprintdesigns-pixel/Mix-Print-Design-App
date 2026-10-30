@@ -258,9 +258,14 @@ model CartItem {
 // ─── Orders & tracking ────────────────────────────────────────────────────────
 
 enum OrderStatus {
-  PENDING_PAYMENT
+  PENDING_PAYMENT // shown as "Pending": order received
   PAYMENT_REVIEW // e.g. bank transfer awaiting manual confirmation
   CONFIRMED
+  // Order flow with 50% advance (Pending → Advance Received → In Progress → Work Completed → Fully Paid → Delivered)
+  ADVANCE_RECEIVED
+  IN_PROGRESS
+  WORK_COMPLETED
+  FULLY_PAID
   IN_DESIGN
   AWAITING_PROOF_APPROVAL
   IN_PRODUCTION
@@ -278,7 +283,10 @@ model Order {
   user            User?       @relation(fields: [userId], references: [id], onDelete: Restrict)
   customerName    String? // for orders recorded by staff
   customerPhone   String?
-  source          String      @default("WEBSITE") // WEBSITE or WHATSAPP
+  customerEmail   String?
+  source          String      @default("WEBSITE") // WEBSITE, WHATSAPP or CHAT
+  amountPaidMinor Int         @default(0) // advance and balance payments received
+  workPhotos      OrderPhoto[]
   status          OrderStatus @default(PENDING_PAYMENT)
   currency        String      @default("PKR")
   subtotalMinor   Int
@@ -320,6 +328,18 @@ model OrderItem {
   artworkFileId  String?
   artworkFile    FileAsset? @relation(fields: [artworkFileId], references: [id], onDelete: SetNull)
   proofs         Proof[]
+}
+
+/** Pictures of the finished work, uploaded by staff at "Work Completed" and sent to the customer. */
+model OrderPhoto {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  url        String
+  storageKey String
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
 }
 
 model OrderStatusEvent {

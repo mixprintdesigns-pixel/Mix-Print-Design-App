@@ -201,11 +201,31 @@ test.describe("WhatsApp orders", () => {
     await page.getByLabel("Item 1 quantity").fill("1000");
     await page.getByLabel("Item 1 total").fill("4500");
     await page.getByRole("button", { name: "Record order" }).click();
-    await expect(page.getByRole("status").filter({ hasText: /Order MP-\w+ recorded\./ })).toBeVisible();
+    const recorded = page.getByRole("status").filter({ hasText: /Order MP-\w+ recorded as Pending\./ });
+    await expect(recorded).toBeVisible();
+    const number = (await recorded.textContent())!.match(/MP-\w+/)![0];
     const row = page.getByTestId("admin-order").filter({ hasText: `Customer ${run}` });
     await expect(row).toContainText("1000 × Matte business cards");
-    await expect(row).toContainText("PKR 4,500");
+    await expect(row).toContainText("Total PKR 4,500");
     await expect(row).toContainText("WhatsApp");
+    await expect(row.getByTestId("order-status")).toHaveText("Pending");
+
+    // 50% advance received
+    await row.getByLabel(`Status of ${number}`).selectOption("ADVANCE_RECEIVED");
+    await row.getByRole("button", { name: "Update" }).click();
+    await expect(row.getByTestId("order-status")).toHaveText("Advance Received");
+    await expect(row).toContainText("Paid PKR 2,250");
+    await expect(row).toContainText("Balance PKR 2,250");
+
+    // Work completed: ready-made WhatsApp message to the customer
+    await row.getByLabel(`Status of ${number}`).selectOption("WORK_COMPLETED");
+    await row.getByRole("button", { name: "Update" }).click();
+    await expect(row.getByTestId("send-whatsapp")).toHaveAttribute("href", /^https:\/\/wa\.me\/923007654321\?text=/);
+
+    // The customer checks the status on the website
+    await page.goto(`/track?order=${number}&phone=0300%207654321`);
+    await expect(page.getByTestId("tracked-status")).toHaveText("Work Completed");
+    await expect(page.getByTestId("tracked-balance")).toHaveText("PKR 2,250");
   });
 });
 

@@ -53,6 +53,11 @@ export async function SiteFooter() {
                 Chat on WhatsApp
               </a>
             </p>
+            <p>
+              <Link href="/track" className="hover:text-foreground">
+                Track your order
+              </Link>
+            </p>
           </address>
         </div>
         <div>

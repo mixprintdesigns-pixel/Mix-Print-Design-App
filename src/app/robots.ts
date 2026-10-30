@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
         "/affiliate/verify",
         "/affiliate/join",
         "/r/",
+        "/track",
       ],
     },
     sitemap: absoluteUrl("/sitemap.xml"),

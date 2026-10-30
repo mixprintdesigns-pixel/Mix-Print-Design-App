@@ -1,13 +1,22 @@
-import { recordOrderAction, updateOrderStatusAction } from "@/app/admin/order-actions";
+import Image from "next/image";
+import { recordOrderAction, updateOrderStatusAction, uploadOrderPhotoAction } from "@/app/admin/order-actions";
 import { ActionForm, SubmitButton } from "@/components/admin/action-form";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { formatPKR } from "@/lib/money";
-import { listRecentOrders, ORDER_STATUSES } from "@/lib/orders/manual";
+import { balanceDue, listRecentOrders, ORDER_STATUSES, PAYMENT_TERMS, STATUS_LABELS, workCompletedMessage } from "@/lib/orders/manual";
+import { getSiteSettings, whatsappUrl } from "@/lib/content/site-settings";
 
 export const metadata = { title: "Orders" };
 
-const label = (status: string) => status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, " ");
+const label = (status: string) => STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status;
+
+/** Ready-made WhatsApp message to the customer with the work photos and the balance request. */
+async function workCompletedWhatsApp(orderId: string) {
+  const [{ text, phone }, settings] = await Promise.all([workCompletedMessage(orderId), getSiteSettings()]);
+  const digits = phone?.replace(/\D/g, "").replace(/^0/, "92");
+  return digits ? whatsappUrl({ ...settings, whatsappNumber: digits }, text) : null;
+}
 
 export default async function AdminOrdersPage() {
   await requireStaff();
@@ -20,13 +29,14 @@ export default async function AdminOrdersPage() {
     <>
       <h1 className="text-2xl font-bold">Orders</h1>
       <p className="mt-1 max-w-3xl text-sm text-muted">
-        Record each WhatsApp order here. If the customer came from an affiliate (their WhatsApp message shows &quot;Ref: CODE&quot;), enter the
-        code: the affiliate&apos;s commission is added and approved after the order is delivered. Cancelled or refunded orders lose the commission.
+        Record each WhatsApp order here (AI chat orders appear automatically). If the customer came from an affiliate (their WhatsApp message shows
+        &quot;Ref: CODE&quot;), enter the code. Payment terms: {PAYMENT_TERMS} The affiliate&apos;s commission is approved automatically when you set
+        the order to Fully Paid; cancelled or refunded orders lose it.
       </p>
 
       <ActionForm action={recordOrderAction} className="card mt-6 space-y-4 p-5">
         <h2 className="text-lg font-bold">Record a WhatsApp order</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block">
             <span className="label">Customer name</span>
             <input name="customerName" className="input" maxLength={100} />
@@ -34,6 +44,10 @@ export default async function AdminOrdersPage() {
           <label className="block">
             <span className="label">Phone / WhatsApp</span>
             <input name="customerPhone" className="input" maxLength={30} />
+          </label>
+          <label className="block">
+            <span className="label">Customer email (optional)</span>
+            <input name="customerEmail" type="email" className="input" maxLength={254} />
           </label>
           <label className="block">
             <span className="label">Affiliate code (optional)</span>
@@ -79,7 +93,7 @@ export default async function AdminOrdersPage() {
                   <th className="p-3 font-medium">Order</th>
                   <th className="p-3 font-medium">Customer</th>
                   <th className="p-3 font-medium">Items</th>
-                  <th className="p-3 font-medium">Total</th>
+                  <th className="p-3 font-medium">Payment</th>
                   <th className="p-3 font-medium">Affiliate</th>
                   <th className="p-3 font-medium">Status</th>
                 </tr>
@@ -104,7 +118,13 @@ export default async function AdminOrdersPage() {
                         </span>
                       ))}
                     </td>
-                    <td className="p-3 font-semibold">{formatPKR(o.totalMinor)}</td>
+                    <td className="whitespace-nowrap p-3 text-xs">
+                      <span className="block font-semibold">Total {formatPKR(o.totalMinor)}</span>
+                      <span className="block">Paid {formatPKR(o.amountPaidMinor)}</span>
+                      <span className={`block ${balanceDue(o) > 0 ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
+                        Balance {formatPKR(balanceDue(o))}
+                      </span>
+                    </td>
                     <td className="p-3 text-xs">
                       {o.affiliate ? (
                         <>
@@ -119,7 +139,10 @@ export default async function AdminOrdersPage() {
                         "—"
                       )}
                     </td>
-                    <td className="p-3">
+                    <td className="space-y-2 p-3">
+                      <p className="text-xs font-semibold" data-testid="order-status">
+                        {label(o.status)}
+                      </p>
                       <ActionForm action={updateOrderStatusAction}>
                         <input type="hidden" name="orderId" value={o.id} />
                         <select name="status" defaultValue={o.status} className="input w-auto py-1.5 text-xs" aria-label={`Status of ${o.number}`}>
@@ -129,8 +152,31 @@ export default async function AdminOrdersPage() {
                             </option>
                           ))}
                         </select>
+                        <input
+                          name="amountReceived"
+                          inputMode="decimal"
+                          className="input w-28 py-1.5 text-xs"
+                          placeholder="Amount received"
+                          aria-label={`Amount received for ${o.number}`}
+                        />
                         <SubmitButton>Update</SubmitButton>
                       </ActionForm>
+                      <details>
+                        <summary className="cursor-pointer text-xs font-semibold text-brand">Work photos ({o.workPhotos.length})</summary>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {o.workPhotos.map((p) => (
+                            <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="relative block h-12 w-12 overflow-hidden rounded">
+                              <Image src={p.url} alt={`Finished work for ${o.number}`} fill sizes="48px" className="object-cover" />
+                            </a>
+                          ))}
+                        </div>
+                        <ActionForm action={uploadOrderPhotoAction} className="mt-2 space-y-1">
+                          <input type="hidden" name="orderId" value={o.id} />
+                          <input type="file" name="photos" multiple accept="image/jpeg,image/png,image/webp" className="text-xs" aria-label={`Work photos for ${o.number}`} />
+                          <SubmitButton>Upload photos</SubmitButton>
+                        </ActionForm>
+                      </details>
+                      {o.status === "WORK_COMPLETED" && <WhatsAppNotice orderId={o.id} />}
                     </td>
                   </tr>
                 ))}
@@ -140,5 +186,15 @@ export default async function AdminOrdersPage() {
         )}
       </section>
     </>
+  );
+}
+
+async function WhatsAppNotice({ orderId }: { orderId: string }) {
+  const link = await workCompletedWhatsApp(orderId);
+  if (!link) return null;
+  return (
+    <a href={link} target="_blank" rel="noopener noreferrer" className="btn bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700" data-testid="send-whatsapp">
+      Send on WhatsApp
+    </a>
   );
 }

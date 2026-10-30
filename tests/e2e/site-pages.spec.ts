@@ -67,6 +67,10 @@ test.describe("home page", () => {
     await expect(reviews.getByText(`Ayesha ${run}`)).toBeVisible();
     await expect(reviews.getByRole("img", { name: "5 out of 5 stars" }).first()).toBeVisible();
     await expect(page.getByText(`Hidden ${run}`)).toHaveCount(0);
+
+    // Hide the test review again so repeated runs don't fill the home page (only 12 are shown).
+    await admin.getByTestId("admin-review").filter({ hasText: `Ayesha ${run}` }).getByRole("button", { name: "Hide" }).click();
+    await expect(admin.getByTestId("admin-review").filter({ hasText: `Ayesha ${run}` })).toContainText("hidden");
   });
 
   test("top products scroll sideways on phones", async ({ page, isMobile }) => {
