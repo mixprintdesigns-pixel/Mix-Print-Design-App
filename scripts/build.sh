@@ -15,7 +15,28 @@ if [ -n "${VERCEL:-}" ]; then
   fi
 
   bash scripts/check-migrations.sh
-  npx prisma migrate deploy
+
+  # Migrations need a direct (unpooled) connection: through Neon's connection pooler the
+  # migration lock is unreliable, and a sleeping Neon database can take a few seconds to wake.
+  # So use the direct URL when there is one, and retry a few times before failing the build.
+  MIGRATE_URL="${DATABASE_URL_UNPOOLED:-${POSTGRES_URL_NON_POOLING:-}}"
+  if [ -z "$MIGRATE_URL" ]; then
+    # Neon's pooled host is "<endpoint>-pooler.<region>…"; the direct host is the same without "-pooler".
+    MIGRATE_URL="${DATABASE_URL/-pooler./.}"
+  fi
+  for attempt in 1 2 3 4; do
+    if DATABASE_URL="$MIGRATE_URL" npx prisma migrate deploy; then
+      break
+    fi
+    if [ "$attempt" = 4 ]; then
+      echo "" >&2
+      echo "ERROR: database migrations failed 4 times. Migration status:" >&2
+      DATABASE_URL="$MIGRATE_URL" npx prisma migrate status >&2 || true
+      exit 1
+    fi
+    echo "Migrations failed (attempt $attempt of 4); retrying in $((attempt * 10))s…" >&2
+    sleep $((attempt * 10))
+  done
 
   if [ "${SEED_DEMO_DATA:-}" = "true" ]; then
     echo "SEED_DEMO_DATA=true: loading demo catalog"
