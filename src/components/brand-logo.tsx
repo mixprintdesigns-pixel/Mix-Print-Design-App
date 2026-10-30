@@ -1,10 +1,47 @@
 import Image from "next/image";
+import { BUSINESS } from "@/lib/business";
 
-/** Mix Print Design logo. The SVG uses dark text, so it sits on a light badge in dark mode. */
-export function BrandLogo({ className = "h-16 w-auto" }: { className?: string }) {
+const ALT = `${BUSINESS.name} logo`;
+
+/**
+ * The Mix Print Design wordmark. Its lettering is dark, so in dark mode the round badge is shown instead.
+ * Never stretched or recoloured: only the height is set.
+ */
+export function BrandLogo({ className = "h-16 w-auto", priority = false }: { className?: string; priority?: boolean }) {
   return (
-    <span className="inline-block rounded-2xl bg-white/90 px-3 py-2 shadow-sm ring-1 ring-black/5">
-      <Image src="/brand/mix-print-design-logo.svg" alt="Mix Print Design" width={360} height={96} priority className={className} unoptimized />
-    </span>
+    <>
+      <Wordmark className={`${className} dark:hidden`} priority={priority} />
+      <BrandBadge className={`${className} hidden aspect-square dark:inline-block`} />
+    </>
+  );
+}
+
+function Wordmark({ className, priority }: { className: string; priority: boolean }) {
+  return (
+    <Image
+      src="/brand/mix-print-design-logo.svg"
+      alt={ALT}
+      width={350}
+      height={100}
+      className={className}
+      unoptimized
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : undefined}
+    />
+  );
+}
+
+/** The round Mix Print Design badge (works on light and dark backgrounds). */
+export function BrandBadge({ className = "h-10 w-10", priority = false }: { className?: string; priority?: boolean }) {
+  return (
+    <Image
+      src="/brand/mix-print-design-badge.webp"
+      alt={ALT}
+      width={512}
+      height={512}
+      className={className}
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : undefined}
+    />
   );
 }

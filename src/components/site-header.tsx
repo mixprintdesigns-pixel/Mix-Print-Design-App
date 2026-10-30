@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getCurrentCartCount } from "@/lib/cart/session";
 import { logoutAction } from "@/app/actions/auth";
+import { BrandLogo } from "@/components/brand-logo";
 import { MobileMenu, type NavLink } from "@/components/mobile-menu";
 
 // Site pages, shown in the header on large screens and in the menu on phones/tablets.
@@ -19,8 +20,8 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
-        <Link href="/" className="text-xl font-extrabold tracking-tight">
-          Mix<span className="text-brand">Print</span>
+        <Link href="/" className="shrink-0" aria-label="Mix Print Design home">
+          <BrandLogo className="h-10 w-auto" priority />
         </Link>
         <nav className="hidden gap-5 text-sm font-medium text-muted lg:flex" aria-label="Main">
           {PAGES.map((l) => (

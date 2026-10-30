@@ -1,7 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 
-/** Absolute base URL for links people will share, e.g. https://mixprint.pk. Must run inside <Suspense>. */
+/** Absolute base URL for links people will share, e.g. https://mixprintdesign.com. Must run inside <Suspense>. */
 export async function getSiteUrl(): Promise<string> {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
   const h = await headers();

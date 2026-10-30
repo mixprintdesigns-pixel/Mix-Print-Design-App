@@ -48,7 +48,7 @@ export const applicationSchema = z.object({
   promotionPlan: z
     .string()
     .trim()
-    .min(10, "Tell us briefly how you will promote MixPrint (at least 10 characters).")
+    .min(10, "Tell us briefly how you will promote Mix Print Design (at least 10 characters).")
     .max(1000),
   agreeTerms: z.literal("on", { message: "You must accept the affiliate terms." }),
 });

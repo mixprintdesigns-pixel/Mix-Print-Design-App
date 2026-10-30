@@ -31,7 +31,7 @@ How to answer:
 
 function formatContext(hits: SearchHit[]): string {
   if (hits.length === 0) return "SITE CONTENT: (no matching pages found)";
-  return ["SITE CONTENT (from mixprint website):", ...hits.map((h, i) => `[${i + 1}] ${h.title} — URL: ${h.url}\n${h.content.slice(0, 1500)}`)].join("\n\n");
+  return ["SITE CONTENT (from the Mix Print Design website):", ...hits.map((h, i) => `[${i + 1}] ${h.title} — URL: ${h.url}\n${h.content.slice(0, 1500)}`)].join("\n\n");
 }
 
 /** First line of a chunk, shortened at a word boundary. */

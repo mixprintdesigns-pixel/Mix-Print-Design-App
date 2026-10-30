@@ -11,8 +11,8 @@ export const metadata: Metadata = { title: "Join the affiliate program", robots:
 export default function JoinPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
-      <h1 className="text-3xl font-bold">Join the MixPrint affiliate program</h1>
-      <p className="mt-2 text-muted">Tell us where to send your earnings and how you plan to share MixPrint.</p>
+      <h1 className="text-3xl font-bold">Join the Mix Print Design affiliate program</h1>
+      <p className="mt-2 text-muted">Tell us where to send your earnings and how you plan to share Mix Print Design.</p>
       <div className="card mt-8 p-6">
         <Suspense fallback={<div className="h-96 animate-pulse" />}>
           <Join />
@@ -29,7 +29,7 @@ async function Join() {
     return (
       <>
         <p className="mb-5 text-sm text-muted">
-          Already have a Mix Print account?{" "}
+          Already have a Mix Print Design account?{" "}
           <Link href="/login?next=/affiliate/join" className="font-semibold text-brand">
             Sign in first
           </Link>

@@ -17,7 +17,7 @@ export default async function AffiliateLandingPage() {
     <>
       <section className="border-b border-border bg-surface">
         <div className="mx-auto max-w-6xl px-4 py-16">
-          <p className="text-sm font-semibold uppercase tracking-widest text-accent">MixPrint affiliate program</p>
+          <p className="text-sm font-semibold uppercase tracking-widest text-accent">Mix Print Design affiliate program</p>
           <h1 className="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight sm:text-5xl">
             Earn <span className="text-brand">{rate} commission</span> on every order you refer.
           </h1>
@@ -78,8 +78,8 @@ export default async function AffiliateLandingPage() {
             <li>Commission is earned on product value only; delivery charges and taxes are excluded.</li>
             <li>Commission is cancelled if the order is cancelled or refunded.</li>
             <li>You cannot earn commission on your own orders.</li>
-            <li>No spam, misleading claims, or paid search ads bidding on the MixPrint name.</li>
-            <li>MixPrint may suspend accounts that break these rules. Earned, valid commission is still paid.</li>
+            <li>No spam, misleading claims, or paid search ads bidding on the Mix Print Design name.</li>
+            <li>Mix Print Design may suspend accounts that break these rules. Earned, valid commission is still paid.</li>
           </ul>
         </div>
       </section>

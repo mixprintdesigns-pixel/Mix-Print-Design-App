@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { BrandBadge } from "@/components/brand-logo";
 import { requireStaff } from "@/lib/auth/session";
 
-export const metadata: Metadata = { title: { default: "Admin", template: "%s · MixPrint Admin" }, robots: { index: false } };
+export const metadata: Metadata = { title: { default: "Admin", template: "%s · Mix Print Design Admin" }, robots: { index: false } };
 
 const sections: { href: string; label: string; ready: boolean }[] = [
   { href: "/admin", label: "Dashboard", ready: true },
@@ -25,6 +26,7 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[13rem_1fr]">
       <nav aria-label="Admin" className="lg:sticky lg:top-24 lg:self-start">
+        <BrandBadge className="mb-3 h-12 w-12" />
         <p className="mb-3 text-xs font-bold uppercase tracking-widest text-accent">Admin</p>
         <ul className="flex gap-1 overflow-x-auto text-sm lg:flex-col">
           {sections.map((s) => (

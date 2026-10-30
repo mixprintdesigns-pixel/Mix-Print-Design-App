@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { BrandBadge } from "@/components/brand-logo";
 
 type Message = { role: "user" | "assistant"; content: string; sources?: { title: string; url: string }[] };
 
@@ -109,9 +110,12 @@ export function ChatWidget() {
           className="fixed inset-x-2 bottom-20 z-50 flex max-h-[min(36rem,calc(100dvh-6rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl sm:inset-x-auto sm:right-5 sm:w-96"
         >
           <header className="flex items-center justify-between bg-gradient-to-r from-brand to-accent px-4 py-3 text-white">
-            <div>
-              <p className="font-bold">Mix Print assistant</p>
+            <div className="flex items-center gap-2">
+              <BrandBadge className="h-9 w-9 shrink-0" />
+              <div>
+              <p className="font-bold">Mix Print Design assistant</p>
               <p className="text-xs opacity-90">Answers from our website · AI may make mistakes</p>
+              </div>
             </div>
             <button type="button" onClick={() => setOpen(false)} className="rounded p-1 text-xl leading-none hover:bg-white/20" aria-label="Close chat">
               ×

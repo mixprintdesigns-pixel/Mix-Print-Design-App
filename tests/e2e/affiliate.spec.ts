@@ -64,7 +64,7 @@ test.describe("affiliate journey", () => {
     await page.getByRole("button", { name: "Submit application" }).click();
     await expect(page.getByText("Tell us briefly how you will promote")).toBeVisible();
     await expect(page.getByText("You must accept the affiliate terms.")).toBeVisible();
-    await page.getByLabel("How will you promote MixPrint?").fill("I run a Lahore small-business WhatsApp group.");
+    await page.getByLabel("How will you promote Mix Print Design?").fill("I run a Lahore small-business WhatsApp group.");
     await page.getByLabel(/I agree to the/).check();
     await page.getByRole("button", { name: "Submit application" }).click();
     await expect(page).toHaveURL(/\/affiliate\/verify$/);
@@ -166,7 +166,7 @@ test.describe("affiliate signup verification", () => {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Mobile number (Pakistan)").fill("12345");
     await page.getByLabel("Password").fill("MixPrint2026!");
-    await page.getByLabel("How will you promote MixPrint?").fill("TikTok videos about small businesses.");
+    await page.getByLabel("How will you promote Mix Print Design?").fill("TikTok videos about small businesses.");
     await page.getByLabel(/I agree to the/).check();
     await page.getByRole("button", { name: "Create account & send codes" }).click();
     await expect(page.getByText("Enter a valid mobile number")).toBeVisible();
@@ -206,7 +206,7 @@ test.describe("affiliate signup verification", () => {
     await other.getByLabel("Mobile number (Pakistan)").fill(mobile.local);
     await other.getByLabel("Password").fill("MixPrint2026!");
     await other.getByLabel("Wallet mobile number").fill(mobile.local);
-    await other.getByLabel("How will you promote MixPrint?").fill("Facebook groups in Karachi.");
+    await other.getByLabel("How will you promote Mix Print Design?").fill("Facebook groups in Karachi.");
     await other.getByLabel(/I agree to the/).check();
     await other.getByRole("button", { name: "Create account & send codes" }).click();
     await expect(other.getByText("This mobile number is already used by another account.")).toBeVisible();

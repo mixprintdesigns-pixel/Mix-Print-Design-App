@@ -37,7 +37,7 @@ async function AccountOverview() {
       <div className="card mt-6 flex flex-wrap items-center justify-between gap-4 p-5">
         <div>
           <p className="font-semibold">Affiliate program</p>
-          <p className="text-sm text-muted">Earn commission by referring customers to MixPrint.</p>
+          <p className="text-sm text-muted">Earn commission by referring customers to Mix Print Design.</p>
         </div>
         <div className="flex gap-2">
           <Link href="/affiliate/dashboard" className="btn-secondary">

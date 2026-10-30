@@ -32,7 +32,7 @@ export function LoginForm({ next }: { next?: string }) {
         {pending ? "Signing in…" : "Sign in"}
       </button>
       <p className="text-center text-sm text-muted">
-        New to MixPrint?{" "}
+        New to Mix Print Design?{" "}
         <Link href={next ? `/register?next=${encodeURIComponent(next)}` : "/register"} className="font-semibold text-brand">
           Create an account
         </Link>

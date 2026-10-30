@@ -55,7 +55,7 @@ export default async function HomePage() {
         <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-24 h-80 w-80 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-[1.15fr_1fr] md:items-center md:py-20">
           <div>
-            <BrandLogo className="h-14 w-auto sm:h-16" />
+            <BrandLogo className="h-14 w-auto sm:h-16" priority />
             <h1 className="mt-6 text-4xl font-extrabold tracking-tight sm:text-5xl">
               Print that makes your brand <span className="text-brand">stand out.</span>
             </h1>
@@ -191,10 +191,10 @@ export default async function HomePage() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-accent">Affiliate program</p>
             <h2 id="affiliate-heading" className="mt-2 text-3xl font-extrabold tracking-tight">
-              Share MixPrint. Earn <span className="text-brand">{formatPercent(affiliate.defaultRateBps)}</span> on every order.
+              Share Mix Print Design. Earn <span className="text-brand">{formatPercent(affiliate.defaultRateBps)}</span> on every order.
             </h2>
             <p className="mt-3 text-muted">
-              Designers, influencers and community admins earn commission when people they refer order printing from MixPrint.
+              Designers, influencers and community admins earn commission when people they refer order printing from Mix Print Design.
               Paid out to JazzCash, Easypaisa or your bank.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">

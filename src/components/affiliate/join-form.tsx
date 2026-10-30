@@ -89,7 +89,7 @@ export function JoinForm({
       </div>
       <div>
         <label htmlFor="promotionPlan" className="label">
-          How will you promote MixPrint?
+          How will you promote Mix Print Design?
         </label>
         <textarea
           id="promotionPlan"
@@ -108,7 +108,7 @@ export function JoinForm({
             <Link href="/affiliate#terms" className="font-semibold text-brand" target="_blank">
               affiliate terms
             </Link>
-            , including no spam, no paid search ads on the MixPrint brand name, and no self-referrals.
+            , including no spam, no paid search ads on the Mix Print Design brand name, and no self-referrals.
           </span>
         </label>
         {errors.agreeTerms && <p className="field-error">{errors.agreeTerms}</p>}
