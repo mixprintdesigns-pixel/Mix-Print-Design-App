@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { hashIp } from "@/lib/affiliate/service";
-import { BUSINESS } from "@/lib/business";
+import { readSiteSettings } from "@/lib/content/site-settings";
 import { prisma } from "@/lib/db";
 import { resendTransport, type EmailTransport } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
@@ -19,6 +19,12 @@ export const contactSchema = z.object({
     .string()
     .trim()
     .max(150)
+    .transform((v) => v || null),
+  service: z
+    .string()
+    .trim()
+    .max(100)
+    .optional()
     .transform((v) => v || null),
   message: z.string().trim().min(10, "Please write a little more (at least 10 characters).").max(5000),
 });
@@ -41,13 +47,14 @@ export async function submitContactMessage(
 
   const saved = await prisma.contactMessage.create({ data: { ...input, ipHash } });
   const result = await transport({
-    to: BUSINESS.email,
+    to: (await readSiteSettings()).email,
     replyTo: input.email,
     subject: `Website enquiry${input.subject ? `: ${input.subject}` : ""} — ${input.name}`,
     text: [
       `Name: ${input.name}`,
       `Email: ${input.email}`,
       `Phone: ${input.phone ?? "—"}`,
+      `Service: ${input.service ?? "—"}`,
       `Subject: ${input.subject ?? "—"}`,
       "",
       input.message,

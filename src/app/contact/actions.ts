@@ -14,6 +14,7 @@ export async function contactAction(_prev: ContactState, data: FormData): Promis
     email: data.get("email") ?? "",
     phone: data.get("phone") ?? "",
     subject: data.get("subject") ?? "",
+    service: data.get("service") ?? "",
     message: data.get("message") ?? "",
   });
   if (!parsed.success) {

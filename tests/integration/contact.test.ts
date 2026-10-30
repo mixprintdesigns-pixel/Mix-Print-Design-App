@@ -10,6 +10,7 @@ const input = contactSchema.parse({
   email: "Hamza@Example.com",
   phone: "0300 1234567",
   subject: "Quote: Board Maker / Backlit",
+  service: "Sign Board Maker",
   message: "I need a 6x3 ft backlit board for my shop.",
 });
 
@@ -27,9 +28,10 @@ describe("contact form", () => {
     expect(sent[0]).toMatchObject({ to: "mixprintdesigns@gmail.com", replyTo: "hamza@example.com" });
     expect(sent[0].subject).toContain("Quote: Board Maker / Backlit");
     expect(sent[0].text).toContain("6x3 ft backlit board");
+    expect(sent[0].text).toContain("Service: Sign Board Maker");
 
     const saved = await prisma.contactMessage.findFirstOrThrow();
-    expect(saved).toMatchObject({ name: "Hamza Ali", email: "hamza@example.com", emailError: null });
+    expect(saved).toMatchObject({ name: "Hamza Ali", email: "hamza@example.com", service: "Sign Board Maker", emailError: null });
     expect(saved.emailSentAt).not.toBeNull();
     expect(saved.ipHash).not.toContain("1.2.3.4");
   });

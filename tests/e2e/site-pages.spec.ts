@@ -215,6 +215,7 @@ test.describe("contact page", () => {
     await expect(page.getByRole("main").getByRole("link", { name: "mixprintdesigns@gmail.com" })).toHaveAttribute("href", "mailto:mixprintdesigns@gmail.com");
     await expect(page.getByRole("main").getByRole("link", { name: "facebook.com/mixprintdesign" })).toHaveAttribute("href", "https://facebook.com/mixprintdesign");
     await expect(page.getByRole("main").getByRole("link", { name: "Chat on WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/923034889255/);
+    await expect(page.getByTestId("whatsapp-float")).toHaveAttribute("href", /^https:\/\/wa\.me\/923034889255\?text=/);
     await expect(page.getByTitle("Mix Print Design location on Google Maps")).toHaveAttribute("src", /google\.com\/maps\?q=.*Raiwind/);
 
     await page.getByRole("button", { name: "Send message" }).click();
@@ -224,6 +225,7 @@ test.describe("contact page", () => {
     await page.getByLabel("Name", { exact: true }).fill(`Visitor ${run}`);
     await page.getByLabel("Email", { exact: true }).fill(`visitor-${run}@example.com`);
     await page.getByLabel("Phone / WhatsApp").fill("0300 1234567");
+    await page.getByLabel("Service", { exact: true }).selectOption("Sign Board Maker");
     await page.getByLabel("Message", { exact: true }).fill("Please quote a 3D steel letter sign, 8 ft wide.");
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(page.getByRole("status")).toContainText("Your message has been sent");
@@ -233,6 +235,7 @@ test.describe("contact page", () => {
     await admin.goto("/admin/messages");
     const message = admin.getByTestId("contact-message").filter({ hasText: `Visitor ${run}` });
     await expect(message).toContainText("Quote: Sign Board Maker / 3D Sign Board");
+    await expect(message).toContainText("Service: Sign Board Maker");
     await expect(message).toContainText("Please quote a 3D steel letter sign");
     await expect(message).toContainText("Not emailed"); // no email key in the test environment
     await message.getByRole("button", { name: "Mark as handled" }).click();

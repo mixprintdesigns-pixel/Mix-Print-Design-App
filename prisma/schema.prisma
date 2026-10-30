@@ -703,6 +703,7 @@ model ContactMessage {
   email       String
   phone       String?
   subject     String? // e.g. "Quote: Board Maker / Backlit"
+  service     String? // the service chosen on the contact form
   message     String
   ipHash      String?
   emailSentAt DateTime? // when the notification reached the business inbox

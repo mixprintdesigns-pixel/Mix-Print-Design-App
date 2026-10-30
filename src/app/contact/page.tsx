@@ -1,19 +1,34 @@
 import { Suspense } from "react";
 import { ContactForm } from "@/components/contact-form";
-import { BUSINESS, MAP_EMBED_URL, whatsappLink } from "@/lib/business";
+import { FacebookIcon, InstagramIcon, TikTokIcon, YouTubeIcon } from "@/components/icons/social-icons";
+import { getCategoryTree } from "@/lib/catalog/queries";
 import { pageMetadata } from "@/lib/content/seo-pages";
+import { getSiteSettings, whatsappUrl } from "@/lib/content/site-settings";
 
 export const generateMetadata = () => pageMetadata("contact");
 
-const details = [
-  { label: "Phone", value: BUSINESS.phoneDisplay, href: `tel:${BUSINESS.phoneTel}` },
-  { label: "WhatsApp", value: BUSINESS.phoneDisplay, href: whatsappLink("Assalam o Alaikum! I have a printing enquiry."), external: true },
-  { label: "Email", value: BUSINESS.email, href: `mailto:${BUSINESS.email}` },
-  { label: "Facebook", value: "facebook.com/mixprintdesign", href: BUSINESS.facebookUrl, external: true },
-  { label: "Address", value: BUSINESS.address },
-];
+const ENQUIRY = "Assalam o Alaikum! I have a printing enquiry.";
 
-export default function ContactPage({ searchParams }: PageProps<"/contact">) {
+/** "https://www.facebook.com/mixprintdesign/" → "facebook.com/mixprintdesign" */
+const shortUrl = (url: string) => url.replace(/^https:\/\/(www\.)?/, "").replace(/\/$/, "");
+
+export default async function ContactPage({ searchParams }: PageProps<"/contact">) {
+  // Contact details, social links and map come from Admin → Contact & social.
+  const [settings, tree] = await Promise.all([getSiteSettings(), getCategoryTree()]);
+  const services = tree.map((s) => s.name);
+  const details = [
+    { label: "Phone", value: settings.phoneDisplay, href: `tel:+${settings.whatsappNumber}` },
+    { label: "WhatsApp", value: settings.phoneDisplay, href: whatsappUrl(settings, ENQUIRY), external: true },
+    { label: "Email", value: settings.email, href: `mailto:${settings.email}` },
+    ...(settings.facebookUrl ? [{ label: "Facebook", value: shortUrl(settings.facebookUrl), href: settings.facebookUrl, external: true }] : []),
+    { label: "Address", value: settings.address },
+  ];
+  const socials = [
+    { href: settings.facebookUrl, label: "Facebook", Icon: FacebookIcon },
+    { href: settings.instagramUrl, label: "Instagram", Icon: InstagramIcon },
+    { href: settings.tiktokUrl, label: "TikTok", Icon: TikTokIcon },
+    { href: settings.youtubeUrl, label: "YouTube", Icon: YouTubeIcon },
+  ].filter((s) => s.href);
   return (
     <>
       <section className="border-b border-border bg-surface">
@@ -31,8 +46,8 @@ export default function ContactPage({ searchParams }: PageProps<"/contact">) {
           </h2>
           <div className="mt-4">
             {/* The subject can be pre-filled from "Get Quote" buttons (?subject=…), a request-time value. */}
-            <Suspense fallback={<ContactForm />}>
-              <PrefilledForm searchParams={searchParams} />
+            <Suspense fallback={<ContactForm services={services} />}>
+              <PrefilledForm searchParams={searchParams} services={services} />
             </Suspense>
           </div>
         </section>
@@ -62,8 +77,25 @@ export default function ContactPage({ searchParams }: PageProps<"/contact">) {
                 </div>
               ))}
             </dl>
+            {socials.length > 0 && (
+              <ul className="mt-4 flex gap-2" aria-label="Follow us">
+                {socials.map(({ href, label, Icon }) => (
+                  <li key={label}>
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${label} (opens in a new tab)`}
+                      className="grid h-10 w-10 place-items-center rounded-full border border-border transition hover:border-brand hover:text-brand"
+                    >
+                      <Icon />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
             <a
-              href={whatsappLink("Assalam o Alaikum! I have a printing enquiry.")}
+              href={whatsappUrl(settings, ENQUIRY)}
               target="_blank"
               rel="noopener noreferrer"
               className="btn mt-5 w-full bg-green-600 text-white hover:bg-green-700"
@@ -71,22 +103,24 @@ export default function ContactPage({ searchParams }: PageProps<"/contact">) {
               Chat on WhatsApp
             </a>
           </section>
-          <section className="card overflow-hidden" aria-label="Map">
-            <iframe
-              title="Mix Print Design location on Google Maps"
-              src={MAP_EMBED_URL}
-              className="h-72 w-full border-0"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
-          </section>
+          {settings.mapEmbedUrl && (
+            <section className="card overflow-hidden" aria-label="Map">
+              <iframe
+                title="Mix Print Design location on Google Maps"
+                src={settings.mapEmbedUrl}
+                className="h-72 w-full border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            </section>
+          )}
         </aside>
       </div>
     </>
   );
 }
 
-async function PrefilledForm({ searchParams }: { searchParams: PageProps<"/contact">["searchParams"] }) {
+async function PrefilledForm({ searchParams, services }: { searchParams: PageProps<"/contact">["searchParams"]; services: string[] }) {
   const { subject } = await searchParams;
-  return <ContactForm subject={typeof subject === "string" ? subject.slice(0, 150) : undefined} />;
+  return <ContactForm subject={typeof subject === "string" ? subject.slice(0, 150) : undefined} services={services} />;
 }

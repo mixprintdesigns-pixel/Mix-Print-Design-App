@@ -45,6 +45,7 @@ export default async function AdminMessagesPage({ searchParams }: PageProps<"/ad
                     </>
                   )}
                 </p>
+                {m.service && <p className="mt-1 text-sm">Service: {m.service}</p>}
                 {m.subject && <p className="mt-1 text-sm font-medium">{m.subject}</p>}
               </div>
               <div className="text-right text-xs">

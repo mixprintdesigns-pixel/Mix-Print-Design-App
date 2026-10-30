@@ -19,7 +19,7 @@ function Field({ id, label, error, children }: { id: string; label: string; erro
   );
 }
 
-export function ContactForm({ subject }: { subject?: string }) {
+export function ContactForm({ subject, services = [] }: { subject?: string; services?: string[] }) {
   const [state, formAction, pending] = useActionState<ContactState, FormData>(contactAction, {});
   const errors = state.errors ?? {};
   const described = (id: string) => (errors[id] ? `${id}-error` : undefined);
@@ -56,6 +56,17 @@ export function ContactForm({ subject }: { subject?: string }) {
       </div>
       <Field id="email" label="Email" error={errors.email}>
         <input id="email" name="email" type="email" autoComplete="email" className="input" required aria-describedby={described("email")} />
+      </Field>
+      <Field id="service" label="Service" error={errors.service}>
+        <select id="service" name="service" className="input" defaultValue="">
+          <option value="">Choose a service (optional)</option>
+          {services.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+          <option value="Other">Other</option>
+        </select>
       </Field>
       <Field id="subject" label="Subject (optional)" error={errors.subject}>
         <input id="subject" name="subject" className="input" defaultValue={subject} maxLength={150} />
