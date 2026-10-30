@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db";
 
-/** Empties every table between tests. */
+/** Empties every table between tests. Refuses to run against anything but a test database. */
 export async function resetDatabase() {
+  const [{ db }] = await prisma.$queryRaw<{ db: string }[]>`SELECT current_database() AS db`;
+  if (!/_(test|e2e)$/.test(db)) throw new Error(`Refusing to empty database "${db}": only *_test or *_e2e databases can be reset.`);
   const tables = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
   await prisma.$executeRawUnsafe(

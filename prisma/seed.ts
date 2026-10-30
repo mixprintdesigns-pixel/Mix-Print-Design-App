@@ -34,47 +34,30 @@ async function main() {
       turnaroundDays: p.turnaroundDays,
       isFeatured: p.isFeatured ?? false,
     };
-    const product = await prisma.product.upsert({ where: { slug: p.slug }, create: { slug: p.slug, ...data }, update: data });
-
-    // Children are rebuilt so re-running the seed reflects edits to seed-data.ts.
-    await prisma.$transaction([
-      prisma.productImage.deleteMany({ where: { productId: product.id } }),
-      prisma.priceTier.deleteMany({ where: { productId: product.id } }),
-      prisma.bulkDiscount.deleteMany({ where: { productId: product.id } }),
-      prisma.productOption.deleteMany({ where: { productId: product.id } }),
-      prisma.productImage.createMany({
-        data: p.imageViews.map((view, i) => ({
-          productId: product.id,
-          url: imagePath(p.slug, i),
-          alt: `${p.name} — ${view}`,
-          sortOrder: i,
-        })),
-      }),
-      prisma.priceTier.createMany({
-        data: (p.tiers ?? []).map(([minQuantity, unitPriceMinor]) => ({ productId: product.id, minQuantity, unitPriceMinor })),
-      }),
-      prisma.bulkDiscount.createMany({
-        data: (p.bulkDiscounts ?? []).map(([minQuantity, percentBps]) => ({ productId: product.id, minQuantity, percentBps })),
-      }),
-      ...p.options.map((o, i) =>
-        prisma.productOption.create({
-          data: {
-            productId: product.id,
+    // Add-only: an existing product (and anything an admin changed on it) is never overwritten or trimmed.
+    const existing = await prisma.product.findUnique({ where: { slug: p.slug }, select: { id: true } });
+    if (existing) continue;
+    await prisma.product.create({
+      data: {
+        slug: p.slug,
+        ...data,
+        images: {
+          create: p.imageViews.map((view, i) => ({ url: imagePath(p.slug, i), alt: `${p.name} — ${view}`, sortOrder: i })),
+        },
+        priceTiers: { create: (p.tiers ?? []).map(([minQuantity, unitPriceMinor]) => ({ minQuantity, unitPriceMinor })) },
+        bulkDiscounts: { create: (p.bulkDiscounts ?? []).map(([minQuantity, percentBps]) => ({ minQuantity, percentBps })) },
+        options: {
+          create: p.options.map((o, i) => ({
             name: o.name,
             kind: o.kind,
             sortOrder: i,
             values: {
-              create: o.values.map(([label, priceDeltaMinor, pricing], j) => ({
-                label,
-                priceDeltaMinor,
-                pricing: pricing ?? "PER_UNIT",
-                sortOrder: j,
-              })),
+              create: o.values.map(([label, priceDeltaMinor, pricing], j) => ({ label, priceDeltaMinor, pricing: pricing ?? "PER_UNIT", sortOrder: j })),
             },
-          },
-        }),
-      ),
-    ]);
+          })),
+        },
+      },
+    });
   }
 
   // Demo admin for local development only.
@@ -87,7 +70,7 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${products.length} demo products.`);
+  console.log(`Demo catalog checked: ${products.length} products (existing ones left untouched).`);
 }
 
 main()

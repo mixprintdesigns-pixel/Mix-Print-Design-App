@@ -14,6 +14,7 @@ if [ -n "${VERCEL:-}" ]; then
     exit 1
   fi
 
+  bash scripts/check-migrations.sh
   npx prisma migrate deploy
 
   if [ "${SEED_DEMO_DATA:-}" = "true" ]; then
