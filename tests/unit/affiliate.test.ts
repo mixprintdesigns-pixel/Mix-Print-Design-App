@@ -59,3 +59,21 @@ describe("payout details", () => {
     expect(payoutDetailsSchema.safeParse({ payoutMethod: "EASYPAISA", payoutAccount: "12345", payoutAccountName: "Ali" }).success).toBe(false);
   });
 });
+
+describe("fixed Rs commission per product", () => {
+  it("pays the fixed amount per order of the product, whatever the quantity, capped at the line total", async () => {
+    const { calculateCommission, fixedCommissionPercentBps } = await import("@/lib/affiliate/commission");
+    const result = calculateCommission(
+      [
+        { productId: "a", productName: "Sign board", lineTotalMinor: 500_000, productRateBps: 1000, productFixedMinor: 20_000 },
+        { productId: "b", productName: "Cards", lineTotalMinor: 100_000, productRateBps: null },
+        { productId: "c", productName: "Sticker", lineTotalMinor: 5_000, productRateBps: null, productFixedMinor: 20_000 },
+      ],
+      { affiliateRateBps: null, defaultRateBps: 500 },
+    );
+    expect(result.breakdown.map((b) => b.commissionMinor)).toEqual([20_000, 5_000, 5_000]);
+    expect(result.breakdown[0]).toMatchObject({ fixedMinor: 20_000, rateBps: 400 }); // Rs 200 on Rs 5,000 = 4%
+    expect(fixedCommissionPercentBps(20_000, 500_000)).toBe(400);
+    expect(fixedCommissionPercentBps(20_000, 0)).toBeNull();
+  });
+});

@@ -128,6 +128,20 @@ export const productInputSchema = z
         }
         return bps;
       }),
+    /** Fixed commission in rupees per order of this product; empty = use the % rules. */
+    affiliateCommissionAmount: z
+      .string()
+      .trim()
+      .optional()
+      .transform((v, ctx) => {
+        if (!v) return null;
+        const minor = parseRupees(v);
+        if (minor === null) {
+          ctx.addIssue({ code: "custom", message: "Affiliate commission: enter an amount in rupees, e.g. 200." });
+          return z.NEVER;
+        }
+        return minor;
+      }),
     priceTiers: z
       .array(z.object({ minQuantity: int("Tier quantity", 2, 100_000), unitPrice: rupees("Tier price") }))
       .max(20),

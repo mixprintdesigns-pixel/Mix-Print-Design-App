@@ -22,6 +22,7 @@ export const EMPTY_PRODUCT: ProductInput = {
   seoTitle: "",
   seoDescription: "",
   affiliateCommission: "",
+  affiliateCommissionAmount: "",
   priceTiers: [],
   bulkDiscounts: [],
   options: [],
@@ -47,6 +48,7 @@ export function toProductInput(p: AdminProduct): ProductInput {
     seoTitle: p.seoTitle ?? "",
     seoDescription: p.seoDescription ?? "",
     affiliateCommission: p.affiliateCommissionBps === null ? "" : String(p.affiliateCommissionBps / 100),
+    affiliateCommissionAmount: p.affiliateCommissionMinor === null ? "" : paisaToRupeesInput(p.affiliateCommissionMinor),
     priceTiers: p.priceTiers.map((t) => ({ minQuantity: t.minQuantity, unitPrice: paisaToRupeesInput(t.unitPriceMinor) })),
     bulkDiscounts: p.bulkDiscounts.map((d) => ({ minQuantity: d.minQuantity, percent: String(d.percentBps / 100) })),
     options: p.options.map((o) => ({

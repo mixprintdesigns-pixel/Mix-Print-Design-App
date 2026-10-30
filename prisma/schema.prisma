@@ -134,6 +134,7 @@ model Product {
   seoTitle               String?
   seoDescription         String?
   affiliateCommissionBps Int? // overrides the affiliate program default; 1000 = 10%
+  affiliateCommissionMinor Int? // fixed affiliate commission in paisa per order of this product (overrides the %)
   serviceCategoryId      String? // where the product appears on the Services page
   serviceCategory        ServiceCategory? @relation(fields: [serviceCategoryId], references: [id], onDelete: SetNull)
   serviceSubtypeId       String?

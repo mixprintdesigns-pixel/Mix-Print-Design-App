@@ -1,4 +1,4 @@
-import { saveSiteSettingsAction } from "@/app/admin/site-actions";
+import { saveSiteSettingsAction, sendTestEmailAction } from "@/app/admin/site-actions";
 import { ActionForm, SubmitButton } from "@/components/admin/action-form";
 import { requireStaff } from "@/lib/auth/session";
 import { readSiteSettings, type SiteSettings } from "@/lib/content/site-settings";
@@ -34,6 +34,19 @@ export default async function AdminSettingsPage() {
           </label>
         ))}
         <SubmitButton className="btn-primary">Save contact details</SubmitButton>
+      </ActionForm>
+
+      <ActionForm action={sendTestEmailAction} className="card mt-6 max-w-2xl space-y-3 p-5">
+        <h2 className="text-lg font-bold">Check email sending</h2>
+        <p className="text-sm text-muted">
+          Sends a test email through Resend. Signup verification codes, contact messages and order emails use the same service
+          ({process.env.RESEND_API_KEY ? "RESEND_API_KEY is set" : "RESEND_API_KEY is not set in Vercel yet"}).
+        </p>
+        <label className="block">
+          <span className="label">Send a test email to</span>
+          <input name="to" type="email" className="input" defaultValue={settings.email} />
+        </label>
+        <SubmitButton className="btn-secondary">Send test email</SubmitButton>
       </ActionForm>
     </>
   );

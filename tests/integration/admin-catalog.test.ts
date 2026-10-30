@@ -67,6 +67,12 @@ beforeEach(async () => {
 });
 
 describe("saving products", () => {
+  it("saves a fixed affiliate commission in rupees", async () => {
+    const id = await saveProduct(null, input({ affiliateCommissionAmount: "200" }));
+    expect(await prisma.product.findUniqueOrThrow({ where: { id } })).toMatchObject({ affiliateCommissionMinor: 20_000 });
+    expect(productInputSchema.safeParse({ ...validProduct, categoryId, affiliateCommissionAmount: "two hundred" }).success).toBe(false);
+  });
+
   it("creates a draft with tiers, discounts and options", async () => {
     const id = await saveProduct(null, input());
     const product = await prisma.product.findUniqueOrThrow({

@@ -71,6 +71,7 @@ export async function saveProduct(id: string | null, data: ProductData): Promise
     seoTitle: data.seoTitle,
     seoDescription: data.seoDescription,
     affiliateCommissionBps: data.affiliateCommission,
+    affiliateCommissionMinor: data.affiliateCommissionAmount,
   };
 
   try {

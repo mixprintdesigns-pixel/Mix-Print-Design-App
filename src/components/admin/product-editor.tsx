@@ -2,9 +2,9 @@
 
 import { cloneElement, useActionState, useId, useState } from "react";
 import { saveProductAction, type AdminFormState } from "@/app/admin/actions";
-import { OPTION_KINDS, type ProductInput } from "@/lib/admin/product-input";
+import { OPTION_KINDS, parseRupees, type ProductInput } from "@/lib/admin/product-input";
 
-type Category = { id: string; name: string; depth: number };
+type Category = { id: string; name: string; depth: number; rootId?: string };
 
 // List rows carry a client-only `key` so React keeps inputs stable while rows are added/removed.
 type Row<T> = T & { key: string };
@@ -54,6 +54,10 @@ export function ProductEditor({
     options: initial.options.map((o) => ({ ...o, key: key(), values: withKeys(o.values) })),
   }));
   const [slugTouched, setSlugTouched] = useState(Boolean(productId));
+  // Pick the service (main category) first, then a category inside it.
+  const services = categories.filter((c) => c.depth === 0);
+  const [serviceId, setServiceId] = useState(() => categories.find((c) => c.id === initial.categoryId)?.rootId ?? "");
+  const serviceCategories = categories.filter((c) => c.rootId === serviceId);
   const [result, formAction, pending] = useActionState<AdminFormState, FormData>(saveProductAction, {});
   const errors = result.errors ?? {};
   const err = (path: string) => errors[path];
@@ -110,10 +114,27 @@ export function ProductEditor({
               }}
             />
           </Field>
+          <Field label="Service">
+            <select
+              className="input"
+              value={serviceId}
+              onChange={(e) => {
+                setServiceId(e.target.value);
+                set("categoryId", e.target.value);
+              }}
+            >
+              <option value="">Choose a service…</option>
+              {services.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Category" error={err("categoryId")}>
-            <select className="input" value={state.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
-              <option value="">Choose a category…</option>
-              {categories.map((c) => (
+            <select className="input" value={state.categoryId} onChange={(e) => set("categoryId", e.target.value)} disabled={!serviceId}>
+              <option value="">{serviceId ? "Choose a category…" : "Choose a service first"}</option>
+              {serviceCategories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {"— ".repeat(c.depth)}
                   {c.name}
@@ -290,10 +311,8 @@ export function ProductEditor({
               <option value="ARCHIVED">Archived (hidden, kept for history)</option>
             </select>
           </Field>
-          <Field label="Affiliate commission %" error={err("affiliateCommission")} hint="Leave empty to use the affiliate program default.">
-            <input className="input" inputMode="decimal" value={state.affiliateCommission} onChange={(e) => set("affiliateCommission", e.target.value)} />
-          </Field>
         </div>
+        <AffiliateCommission state={state} set={set} err={err} />
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           <Check label="Available to order" checked={state.isAvailable} onChange={(v) => set("isAvailable", v)} />
           <Check label="Featured on home page" checked={state.isFeatured} onChange={(v) => set("isFeatured", v)} />
@@ -397,5 +416,56 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
     <button type="button" aria-label={label} title={label} onClick={onClick} className="mt-6 rounded border border-border px-2 py-1.5 text-sm text-red-600 hover:border-red-400">
       ✕
     </button>
+  );
+}
+
+/** Affiliate commission in rupees per order, with the matching percentage of the starting order price. */
+function AffiliateCommission({
+  state,
+  set,
+  err,
+}: {
+  state: EditorState;
+  set: <K extends keyof EditorState>(key: K, value: EditorState[K]) => void;
+  err: (path: string) => string | undefined;
+}) {
+  const amount = parseRupees(state.affiliateCommissionAmount ?? "");
+  const unit = parseRupees(String(state.basePrice));
+  const minQty = Number(state.minQuantity) || 1;
+  const orderPrice = unit === null ? null : unit * minQty;
+  const percent = amount !== null && orderPrice ? (amount / orderPrice) * 100 : null;
+  return (
+    <fieldset className="rounded-lg border border-border p-4" data-testid="affiliate-commission">
+      <legend className="px-1 text-sm font-semibold">Affiliate commission</legend>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Field
+            label="Commission per order (Rs)"
+            error={err("affiliateCommissionAmount")}
+            hint="What an affiliate earns for each order of this product, e.g. 200. Leave empty to use the % instead."
+          >
+            <input
+              className="input"
+              inputMode="decimal"
+              value={state.affiliateCommissionAmount ?? ""}
+              onChange={(e) => set("affiliateCommissionAmount", e.target.value)}
+            />
+          </Field>
+          {percent !== null && orderPrice !== null && (
+            <p className="mt-1 text-sm" data-testid="commission-percent">
+              <span className="font-semibold text-brand">= {percent.toLocaleString("en-PK", { maximumFractionDigits: 1 })}%</span>
+              <span className="text-xs text-muted">
+                {" "}
+                of the starting order price Rs {(orderPrice / 100).toLocaleString("en-PK")}
+                {minQty > 1 ? ` (${minQty} × Rs ${(unit! / 100).toLocaleString("en-PK")})` : ""}
+              </span>
+            </p>
+          )}
+        </div>
+        <Field label="Or commission %" error={err("affiliateCommission")} hint="Used only when no Rs amount is set. Empty = program default.">
+          <input className="input" inputMode="decimal" value={state.affiliateCommission} onChange={(e) => set("affiliateCommission", e.target.value)} />
+        </Field>
+      </div>
+    </fieldset>
   );
 }

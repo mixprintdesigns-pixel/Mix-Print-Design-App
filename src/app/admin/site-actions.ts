@@ -4,6 +4,7 @@
 import { refresh, updateTag } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/session";
+import { resendTransport } from "@/lib/email";
 import { prisma } from "@/lib/db";
 import { REVIEWS_TAG } from "@/lib/reviews/queries";
 import { moveReview, reviewSchema, saveReview } from "@/lib/reviews/admin";
@@ -171,6 +172,21 @@ export async function saveSiteSettingsAction(_prev: ActionState, data: FormData)
   updateTag(CONTENT_TAG);
   refresh();
   return { message: "Contact details saved." };
+}
+
+// ─── Email check ─────────────────────────────────────────────────────────────
+
+/** Sends a test email through Resend so the owner can confirm emails (e.g. verification codes) arrive. */
+export async function sendTestEmailAction(_prev: ActionState, data: FormData): Promise<ActionState> {
+  await requireStaff(["ADMIN"]);
+  const to = z.string().trim().email("Enter a valid email address.").safeParse(data.get("to"));
+  if (!to.success) return { error: firstIssue(to.error) };
+  const result = await resendTransport({
+    to: to.data,
+    subject: "Mix Print Design test email",
+    text: "This is a test email from your Mix Print Design website. If you can read this, verification codes and order emails will arrive too.",
+  });
+  return result.sent ? { message: `Test email sent to ${to.data}. Check the inbox (and the spam folder).` } : { error: result.error };
 }
 
 // ─── Contact messages ────────────────────────────────────────────────────────

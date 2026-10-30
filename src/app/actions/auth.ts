@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
 import { refresh } from "next/cache";
 import { authenticate, EmailTakenError, LOCKOUT_MS, registerUser } from "@/lib/auth/service";
 import { endSession, safeNextPath, startSession } from "@/lib/auth/session";
@@ -62,7 +63,12 @@ export async function loginAction(_prev: AuthFormState, formData: FormData): Pro
 
   await startSession(result.user.id);
   await adoptGuestCart(result.user.id);
-  redirect(safeNextPath(formData.get("next")));
+  // Affiliates land on their dashboard unless the sign-in asked to return somewhere specific.
+  const next = formData.get("next");
+  if (!next && (await prisma.affiliate.findUnique({ where: { userId: result.user.id }, select: { id: true } }))) {
+    redirect("/affiliate/dashboard");
+  }
+  redirect(safeNextPath(next));
 }
 
 export async function logoutAction(): Promise<void> {

@@ -6,6 +6,8 @@ export type CommissionItemInput = {
   lineTotalMinor: number;
   /** Product-specific rate (Product.affiliateCommissionBps), if set. */
   productRateBps: number | null;
+  /** Fixed commission in paisa per order of this product (Product.affiliateCommissionMinor); takes precedence over rates. */
+  productFixedMinor?: number | null;
 };
 
 export type CommissionBreakdownItem = {
@@ -13,6 +15,8 @@ export type CommissionBreakdownItem = {
   productName: string;
   baseMinor: number;
   rateBps: number;
+  /** Set when the product pays a fixed amount per order instead of a percentage. */
+  fixedMinor?: number;
   commissionMinor: number;
 };
 
@@ -23,7 +27,8 @@ export type CommissionCalculation = {
 };
 
 /**
- * Rate precedence: product rate → affiliate's custom rate → program default.
+ * Precedence: product's fixed Rs amount (per order of that product, any quantity, never more than
+ * the line total) → product rate → affiliate's custom rate → program default.
  * The base is each item's line total. Order-level discounts are shared across items in
  * proportion to their totals; shipping never earns commission.
  */
@@ -39,6 +44,17 @@ export function calculateCommission(
     const share = subtotal > 0 ? Math.round((discount * item.lineTotalMinor) / subtotal) : 0;
     const baseMinor = Math.max(item.lineTotalMinor - share, 0);
     const rateBps = item.productRateBps ?? rates.affiliateRateBps ?? rates.defaultRateBps;
+    if (item.productFixedMinor != null) {
+      const fixed = Math.min(item.productFixedMinor, baseMinor);
+      return {
+        productId: item.productId,
+        productName: item.productName,
+        baseMinor,
+        rateBps: baseMinor > 0 ? Math.round((fixed * 10_000) / baseMinor) : 0,
+        fixedMinor: item.productFixedMinor,
+        commissionMinor: fixed,
+      };
+    }
     return {
       productId: item.productId,
       productName: item.productName,
@@ -65,4 +81,9 @@ export function normalizeCode(code: string): string | null {
 export function safeLandingPath(to: string | null | undefined): string {
   if (!to || !to.startsWith("/") || to.startsWith("//") || to.includes("\\") || to.startsWith("/r/")) return "/";
   return to.slice(0, 300);
+}
+
+/** "Rs 200 on Rs 5,000" → 400 basis points (4%), for showing a fixed commission as a percentage. */
+export function fixedCommissionPercentBps(commissionMinor: number, priceMinor: number): number | null {
+  return priceMinor > 0 ? Math.round((commissionMinor * 10_000) / priceMinor) : null;
 }

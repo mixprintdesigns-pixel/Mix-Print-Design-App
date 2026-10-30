@@ -62,6 +62,7 @@ test.describe("admin catalog management", () => {
     await page.getByLabel("Product name").fill(productName);
     await expect(page.getByLabel("URL slug")).toHaveValue(`e2e-stickers-${run}`);
     await page.getByLabel("SKU (unique product code)").fill(`E2E-${run}`);
+    await page.getByLabel("Service", { exact: true }).selectOption({ label: "Offset Printing" });
     await page.getByLabel("Category").selectOption({ label: `— — ${categoryName}` });
     await page.getByLabel("Short description").fill("Test sticker sheets");
     await page.getByLabel("Full description").fill("Created by the end-to-end test.");
@@ -69,6 +70,9 @@ test.describe("admin catalog management", () => {
     await page.getByLabel("Minimum quantity").fill("100");
     await page.getByLabel("Quantity step").fill("100");
     await page.getByLabel("Production time (working days)").fill("2");
+    // Commission in rupees, with the percentage worked out from the starting order price (100 × Rs 5 = Rs 500).
+    await page.getByLabel("Commission per order (Rs)").fill("50");
+    await expect(page.getByTestId("commission-percent")).toContainText("= 10%");
 
     await page.getByRole("button", { name: "+ Add tier" }).click();
     await page.getByLabel("From quantity").first().fill("200");

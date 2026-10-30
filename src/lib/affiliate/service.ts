@@ -149,7 +149,7 @@ export async function createCommissionForOrder(orderId: string, referralCode: st
     findActiveAffiliate(referralCode),
     prisma.order.findUniqueOrThrow({
       where: { id: orderId },
-      include: { items: { include: { product: { select: { affiliateCommissionBps: true } } } } },
+      include: { items: { include: { product: { select: { affiliateCommissionBps: true, affiliateCommissionMinor: true } } } } },
     }),
     getAffiliateSettings(),
   ]);
@@ -161,6 +161,7 @@ export async function createCommissionForOrder(orderId: string, referralCode: st
       productName: i.productName,
       lineTotalMinor: i.lineTotalMinor,
       productRateBps: i.product?.affiliateCommissionBps ?? null,
+      productFixedMinor: i.product?.affiliateCommissionMinor ?? null,
     })),
     { affiliateRateBps: affiliate.commissionRateBps, defaultRateBps: settings.defaultRateBps },
     order.discountMinor,
