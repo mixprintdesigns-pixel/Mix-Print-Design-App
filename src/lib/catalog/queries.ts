@@ -25,6 +25,8 @@ const cardSelect = {
   category: { select: { name: true, slug: true } },
   images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true, alt: true } },
   priceTiers: { select: { minQuantity: true, unitPriceMinor: true } },
+  affiliateCommissionMinor: true,
+  affiliateCommissionBps: true,
 } satisfies Prisma.ProductSelect;
 
 /** A product as shown on cards, with its canonical URL (/products/<category path>/<product slug>). */

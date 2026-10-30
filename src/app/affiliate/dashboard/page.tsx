@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { CopyField, LinkBuilder, PayoutForm, WithdrawButton } from "@/components/affiliate/dashboard-widgets";
+import { CopyField, CopyLinkButton, PayoutForm, WithdrawButton } from "@/components/affiliate/dashboard-widgets";
 import { requireUser } from "@/lib/auth/session";
-import { listProducts } from "@/lib/catalog/queries";
+import { listProducts, startingUnitPrice, type ProductCard } from "@/lib/catalog/queries";
 import {
   getAffiliateForUser,
   getAffiliateSettings,
@@ -40,6 +41,13 @@ const commissionStyle: Record<string, string> = {
 
 function Badge({ status }: { status: string }) {
   return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${commissionStyle[status] ?? ""}`}>{status.toLowerCase()}</span>;
+}
+
+/** What one order of this product earns: the fixed Rs amount, or the % of the starting order price. */
+function productEarning(p: ProductCard, affiliateRateBps: number): number {
+  const startingOrder = startingUnitPrice(p) * p.minQuantity;
+  if (p.affiliateCommissionMinor != null) return Math.min(p.affiliateCommissionMinor, startingOrder);
+  return Math.floor((startingOrder * (p.affiliateCommissionBps ?? affiliateRateBps)) / 10_000);
 }
 
 async function Dashboard({ searchParams }: { searchParams: PageProps<"/affiliate/dashboard">["searchParams"] }) {
@@ -91,8 +99,44 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/affiliate
 
       {affiliate.status === "APPROVED" && (
         <section className="card mt-6 grid gap-6 p-5 lg:grid-cols-2">
-          <CopyField label="Your referral link" value={link} testId="referral-link" />
-          <LinkBuilder baseLink={link} products={products.map((p) => ({ slug: p.slug, name: p.name }))} />
+          <CopyField label="Your referral link for the whole website" value={link} testId="referral-link" />
+          <p className="self-end text-sm text-muted">
+            Share this link, or a product link below. Anyone who opens it is remembered for {settings.cookieDays} days, and their
+            WhatsApp or chat order earns you commission once they have paid in full.
+          </p>
+        </section>
+      )}
+
+      {affiliate.status === "APPROVED" && products.length > 0 && (
+        <section className="mt-6" aria-labelledby="products-heading">
+          <h2 id="products-heading" className="text-lg font-bold">
+            Products to share
+          </h2>
+          <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {products.map((p) => {
+              const earn = productEarning(p, affiliate.commissionRateBps ?? settings.defaultRateBps);
+              const image = p.images[0];
+              return (
+                <li key={p.id} className="card flex flex-col overflow-hidden" data-testid="affiliate-product">
+                  <div className="relative aspect-[4/3] bg-background">
+                    {image && (
+                      <Image src={image.url} alt={image.alt} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover" unoptimized={image.url.endsWith(".svg")} />
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1 p-4">
+                    <p className="font-semibold">{p.name}</p>
+                    <p className="text-sm text-muted">From {formatPKR(startingUnitPrice(p) * p.minQuantity)}</p>
+                    <p className="text-sm font-bold text-green-700 dark:text-green-400" data-testid="you-earn">
+                      You earn: {formatPKR(earn)}
+                    </p>
+                    <div className="mt-auto pt-2">
+                      <CopyLinkButton value={`${link}?to=${encodeURIComponent(p.href)}`} />
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
 
@@ -115,11 +159,19 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/affiliate
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <section className="card p-5 lg:col-span-1">
-          <h2 className="text-lg font-bold">Balance</h2>
+          <h2 className="text-lg font-bold">Commission</h2>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between">
-              <dt className="text-muted">Pending (order not yet confirmed)</dt>
-              <dd>{formatPKR(stats.pendingMinor)}</dd>
+              <dt className="text-muted">Pending (customer has not paid in full yet)</dt>
+              <dd data-testid="commission-pending">{formatPKR(stats.pendingMinor)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted">Approved</dt>
+              <dd data-testid="commission-approved">{formatPKR(stats.availableMinor + stats.processingMinor)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted">Paid</dt>
+              <dd data-testid="commission-paid">{formatPKR(stats.paidMinor)}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted">Withdrawal in progress</dt>
@@ -133,8 +185,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/affiliate
             </div>
           </dl>
           <p className="mt-2 text-xs text-muted">
-            Minimum withdrawal {formatPKR(settings.minWithdrawalMinor)}. Commission is confirmed {settings.holdDays} days after
-            delivery.
+            Minimum withdrawal {formatPKR(settings.minWithdrawalMinor)}. Commission is approved when the customer has paid in full.
           </p>
           <div className="mt-4">
             <WithdrawButton disabled={hasOpenWithdrawal || stats.availableMinor < Math.max(settings.minWithdrawalMinor, 1)} />

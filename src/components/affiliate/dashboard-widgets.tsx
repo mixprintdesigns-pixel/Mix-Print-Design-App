@@ -5,6 +5,25 @@ import { requestWithdrawalAction, updatePayoutAction, type AffiliateFormState } 
 import type { PayoutMethodValue } from "@/lib/affiliate/validation";
 import { PayoutFields } from "./payout-fields";
 
+/** "Copy Link" button for one product's referral link. */
+export function CopyLinkButton({ value, label = "Copy Link" }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn-primary w-full py-2 text-sm"
+      data-link={value}
+      onClick={async () => {
+        await navigator.clipboard?.writeText(value).catch(() => {});
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+    >
+      {copied ? "Link copied!" : label}
+    </button>
+  );
+}
+
 export function CopyField({ label, value, testId }: { label: string; value: string; testId?: string }) {
   const [copied, setCopied] = useState(false);
   return (

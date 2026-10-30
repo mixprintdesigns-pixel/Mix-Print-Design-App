@@ -88,14 +88,18 @@ test.describe("affiliate journey", () => {
     const link = await page.getByTestId("referral-link").inputValue();
     expect(link).toMatch(/\/r\/SANAMA[A-Z2-9]{4}$/);
     const code = link.split("/r/")[1];
-    await page.getByLabel("Link to a specific product").selectOption({ label: "A5 Flyers" });
-    await expect(page.getByTestId("product-link")).toHaveValue(`${link}?to=%2Fproducts%2Fa5-flyers`);
+    // Every product has its earning and a Copy Link button with the affiliate's code.
+    const flyers = page.getByTestId("affiliate-product").filter({ hasText: "A5 Flyers" });
+    await expect(flyers.getByTestId("you-earn")).toContainText(/You earn: PKR [\d,]+/);
+    const productLink = (await flyers.getByRole("button", { name: "Copy Link" }).getAttribute("data-link"))!;
+    expect(productLink).toBe(`${link}?to=${encodeURIComponent("/products/offset-printing/flyers-leaflets/a5-flyers/a5-flyers")}`);
 
     // 4. A visitor clicks the product link and later registers
     const visitorContext = await browser.newContext();
     const visitor = await visitorContext.newPage();
-    await visitor.goto(new URL(await page.getByTestId("product-link").inputValue()).pathname + "?to=%2Fproducts%2Fa5-flyers");
-    await expect(visitor).toHaveURL(/\/products\/a5-flyers$/);
+    const productUrl = new URL(productLink);
+    await visitor.goto(productUrl.pathname + productUrl.search);
+    await expect(visitor).toHaveURL(/\/products\/offset-printing\/flyers-leaflets\/a5-flyers\/a5-flyers$/);
     const ref = (await visitorContext.cookies()).find((c) => c.name === "mp_ref");
     expect(ref).toMatchObject({ value: code, httpOnly: true });
     await register(visitor, "Bilal Ahmed", buyerEmail);
