@@ -9,6 +9,12 @@ import { getSiteSettings, whatsappUrl } from "@/lib/content/site-settings";
 
 export const metadata = { title: "Orders" };
 
+/** Address given with an "Order now" website order. */
+const addressOf = (address: unknown) => (address && typeof address === "object" && "address" in address ? String(address.address) : "");
+/** "Size: A4 · Paper: 350gsm" from an order line's chosen options. */
+const optionsOf = (summary: unknown) =>
+  Array.isArray(summary) ? summary.map((o: { option?: string; value?: string }) => `${o.option}: ${o.value}`).join(" · ") : "";
+
 const label = (status: string) => STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status;
 
 /** Ready-made WhatsApp message to the customer with the work photos and the balance request. */
@@ -118,11 +124,13 @@ export default async function AdminOrdersPage() {
                     <td className="p-3">
                       {o.customerName ?? o.user?.name ?? "—"}
                       {o.customerPhone && <span className="block text-xs text-muted">{o.customerPhone}</span>}
+                      {addressOf(o.shippingAddress) && <span className="block text-xs text-muted">{addressOf(o.shippingAddress)}</span>}
                     </td>
                     <td className="p-3 text-xs">
                       {o.items.map((i, n) => (
                         <span key={n} className="block">
                           {i.quantity} × {i.productName}
+                          {optionsOf(i.optionsSummary) && <span className="block text-muted">{optionsOf(i.optionsSummary)}</span>}
                         </span>
                       ))}
                     </td>
@@ -136,7 +144,10 @@ export default async function AdminOrdersPage() {
                     <td className="p-3 text-xs">
                       {o.affiliate ? (
                         <>
-                          {o.affiliate.code}
+                          <span className="block font-semibold" data-testid="order-affiliate">
+                            {o.affiliate.user.name}
+                          </span>
+                          <span className="font-mono">{o.affiliate.code}</span>
                           {o.commission && (
                             <span className="block text-muted">
                               {formatPKR(o.commission.amountMinor)} · {label(o.commission.status)}

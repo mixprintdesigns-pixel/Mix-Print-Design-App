@@ -53,20 +53,17 @@ test("product gallery and live price", async ({ page }) => {
 
   await page.getByLabel("Quantity").fill("150");
   await expect(page.getByRole("main").getByRole("alert")).toHaveText(/steps of 100/);
-  await expect(page.getByTestId("order-whatsapp")).toHaveCount(0); // no order link while the quantity is invalid
+  await expect(page.getByTestId("order-now")).toBeDisabled(); // no ordering while the quantity is invalid
 });
 
-test("orders go to WhatsApp with the chosen options; the cart is switched off", async ({ page, request }) => {
+// Placing the order (saved first, then WhatsApp) is covered in order-now.spec.ts.
+test("products are ordered with Order now; the cart is switched off", async ({ page, request }) => {
   await openBusinessCards(page);
   await page.getByText("Front & back").click();
   await page.getByLabel("Quantity").fill("500");
-  await page.getByLabel(/Notes for our team/).fill("Logo on both sides");
-  const order = page.getByTestId("order-whatsapp");
-  await expect(order).toHaveText("Order on WhatsApp");
-  const href = decodeURIComponent((await order.getAttribute("href"))!);
-  expect(href).toMatch(/^https:\/\/wa\.me\/923034889255\?text=/);
-  for (const text of ["*Standard Business Cards*", "Printed sides: Front & back", "Quantity: 500", "Notes: Logo on both sides"]) expect(href).toContain(text);
-  expect(href).toContain("/products/offset-printing/business-cards/standard-business-cards");
+  await expect(page.getByTestId("order-now")).toHaveText("Order now");
+  await page.getByTestId("order-now").click();
+  await expect(page.getByRole("form", { name: "Your details" })).toBeVisible();
 
   await expect(page.locator("header").getByRole("link", { name: /Cart/ })).toHaveCount(0);
   const cart = await request.get("/cart", { maxRedirects: 0 });

@@ -324,9 +324,10 @@ export async function listRecentOrders(take = 100) {
       amountPaidMinor: true,
       placedAt: true,
       user: { select: { name: true } },
-      affiliate: { select: { code: true } },
+      affiliate: { select: { code: true, user: { select: { name: true } } } },
       commission: { select: { amountMinor: true, status: true } },
-      items: { select: { productName: true, quantity: true } },
+      items: { select: { productName: true, quantity: true, optionsSummary: true } },
+      shippingAddress: true,
       workPhotos: { orderBy: { createdAt: "asc" }, select: { id: true, url: true } },
     },
   });

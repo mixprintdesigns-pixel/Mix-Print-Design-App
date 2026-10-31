@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import type { ManualPaymentMethod } from "@/generated/prisma/client";
+import { approveCommission } from "@/lib/affiliate/service";
 import { NOT_SALES_STATUSES } from "./shared";
 
 // Payments: money received against orders (Cash, Bank transfer, JazzCash, Easypaisa),
@@ -57,7 +58,19 @@ export async function recordPayment(input: RecordPaymentInput, staffId: string |
       recordedById: staffId,
     },
   });
+  await approveCommissionWhenFullyPaid(order.id);
   return { payment, orderNumber: order.number };
+}
+
+/** Once an order is paid in full, its affiliate's Pending commission is approved (as "Fully Paid" does on the Orders screen). */
+async function approveCommissionWhenFullyPaid(orderId: string) {
+  const order = await prisma.order.findUniqueOrThrow({
+    where: { id: orderId },
+    select: { totalMinor: true, amountPaidMinor: true, status: true, commission: { select: { id: true, status: true } } },
+  });
+  if (order.commission?.status !== "PENDING" || order.totalMinor <= 0 || (NOT_SALES_STATUSES as readonly string[]).includes(order.status)) return;
+  const recorded = (await recordedTotals([orderId])).get(orderId) ?? 0;
+  if (amountReceived(order, recorded) >= order.totalMinor) await approveCommission(order.commission.id);
 }
 
 /** Sum of recorded payments per order id. */

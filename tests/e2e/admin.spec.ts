@@ -150,10 +150,7 @@ test.describe("admin catalog management", () => {
     await page.getByLabel("Quantity").fill("200");
     // (4 + 2) × 200 = 1,200 − 10% = 1,080 + 500 plate
     await expect(total).toHaveText("PKR 1,580");
-    const href = decodeURIComponent((await page.getByTestId("order-whatsapp").getAttribute("href"))!);
-    expect(href).toContain(`*${productName}*`);
-    expect(href).toContain("Size: Large");
-    expect(href).toContain("Price shown: PKR 1,580");
+    await expect(page.getByTestId("order-now")).toBeEnabled();
   });
 
   test("customers cannot open the admin area", async ({ page }) => {
@@ -231,11 +228,8 @@ test.describe("WhatsApp orders", () => {
 
 test("WhatsApp messages carry the affiliate code of a referred visitor", async ({ page, context }) => {
   await context.addCookies([{ name: "mp_ref_code", value: "TEST1234", url: "http://localhost:3100" }]);
+  // (Order now messages carry the code from the server; see order-now.spec.ts.)
   await page.goto("/products/offset-printing/business-cards/standard-business-cards");
-  await page.getByLabel("Quantity").fill("500");
-  await expect
-    .poll(async () => decodeURIComponent((await page.getByTestId("order-whatsapp").getAttribute("href")) ?? ""))
-    .toMatch(/Quantity: 500[\s\S]*Ref: TEST1234$/);
   await expect
     .poll(async () => decodeURIComponent((await page.getByTestId("whatsapp-float").getAttribute("href")) ?? ""))
     .toContain("Ref: TEST1234");
