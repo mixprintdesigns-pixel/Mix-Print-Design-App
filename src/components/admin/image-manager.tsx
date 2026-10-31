@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import { useRef, useState, useTransition } from "react";
+import { upload as uploadToBlob } from "@vercel/blob/client";
 import {
+  attachProductImageAction,
+  checkProductImageUploadAction,
   deleteProductImageAction,
   generateProductImageAction,
   reorderProductImagesAction,
@@ -41,7 +44,34 @@ async function shrinkForUpload(file: File): Promise<File> {
   return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
 }
 
-export function ImageManager({ productId, images }: { productId: string; images: ProductImage[] }) {
+/** Product photos are kept within 1000 × 1000 px as WebP; the browser does this before a direct upload. */
+const MAX_PX = 1000;
+
+async function toWebpInBrowser(file: File): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_PX / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.82));
+    // Browsers that cannot make WebP return PNG instead: then upload the original and the server converts it.
+    if (!blob || blob.type !== "image/webp") return file;
+    return new File([blob], file.name.replace(/\.\w+$/, "") + ".webp", { type: "image/webp" });
+  } catch {
+    return file;
+  }
+}
+
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error)) || "unknown error";
+
+/**
+ * `directUpload`: the browser sends each file straight to Vercel Blob (no size limit from our server),
+ * then the server records it. Without Blob storage (local development) files go through a server action.
+ */
+export function ImageManager({ productId, images, directUpload = false }: { productId: string; images: ProductImage[]; directUpload?: boolean }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: "error" | "ok"; text: string } | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
@@ -55,6 +85,14 @@ export function ImageManager({ productId, images }: { productId: string; images:
     const list = Array.from(files);
     startTransition(async () => {
       const failures: string[] = [];
+      if (directUpload) {
+        const check = await checkProductImageUploadAction(productId).catch((error) => ({ error: errorText(error) }));
+        if (check.error) {
+          setMessage({ kind: "error", text: `Upload not possible: ${check.error}` });
+          if (fileInput.current) fileInput.current.value = "";
+          return;
+        }
+      }
       // One file per request keeps each upload under the server's size limit.
       for (const [i, file] of list.entries()) {
         setProgress(`Uploading ${i + 1} of ${list.length}…`);
@@ -63,14 +101,28 @@ export function ImageManager({ productId, images }: { productId: string; images:
           continue;
         }
         try {
-          const data = new FormData();
-          data.set("productId", productId);
-          data.set("file", await shrinkForUpload(file));
-          const result = await uploadProductImageAction(data);
-          if (result.error) failures.push(`${file.name}: ${result.error}`);
-        } catch {
-          // e.g. the connection dropped or the request was refused: report it instead of crashing the page.
-          failures.push(`${file.name}: the upload did not reach the server. Check your connection, or try a smaller image.`);
+          if (directUpload) {
+            const prepared = await toWebpInBrowser(file);
+            const ext = prepared.type === "image/webp" ? "webp" : prepared.type === "image/png" ? "png" : "jpg";
+            const name = file.name.replace(/\.\w+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "image";
+            const blob = await uploadToBlob(`products/${productId}/upload-${name}.${ext}`, prepared, {
+              access: "public",
+              handleUploadUrl: "/api/admin/product-images/upload",
+              clientPayload: productId,
+              contentType: prepared.type,
+            });
+            const result = await attachProductImageAction(productId, blob.url);
+            if (result.error) failures.push(`${file.name}: ${result.error}`);
+          } else {
+            const data = new FormData();
+            data.set("productId", productId);
+            data.set("file", await shrinkForUpload(file));
+            const result = await uploadProductImageAction(data);
+            if (result.error) failures.push(`${file.name}: ${result.error}`);
+          }
+        } catch (error) {
+          // Show the exact reason (e.g. a refused request or a storage error) instead of crashing the page.
+          failures.push(`${file.name}: upload failed: ${errorText(error)}`);
         }
       }
       setProgress(null);

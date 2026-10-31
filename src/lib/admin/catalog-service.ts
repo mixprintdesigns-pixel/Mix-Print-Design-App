@@ -4,6 +4,9 @@ import type { Prisma } from "@/generated/prisma/client";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { descriptiveKey, toWebp } from "@/lib/storage/webp";
 import { describeStorageError } from "@/lib/storage/errors";
+import { isOwnProductUpload } from "@/lib/storage/blob-direct";
+import { checkImage } from "@/lib/storage/images";
+import sharp from "sharp";
 import type { CategoryData, FieldErrorMap, ProductData } from "./product-input";
 
 /** A problem the admin can fix; `field` points at the input to highlight. */
@@ -157,6 +160,52 @@ export async function deleteProduct(id: string): Promise<"deleted" | "archived">
 }
 
 // ─── Product images ──────────────────────────────────────────────────────────
+
+/**
+ * Saves an image the admin's browser uploaded straight to Vercel Blob (see lib/storage/blob-direct.ts).
+ * A WebP within 1000 × 1000 is used as is; anything else is converted here and the original removed.
+ */
+export async function attachUploadedProductImage(productId: string, url: string) {
+  if (!isOwnProductUpload(url, productId)) throw new AdminInputError("This upload is not from our image storage.", "image");
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { name: true, images: { select: { sortOrder: true }, orderBy: { sortOrder: "desc" }, take: 1 } },
+  });
+  if (!product) throw new AdminInputError("This product no longer exists.");
+
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new AdminInputError(`The uploaded file could not be read back from storage (HTTP ${response.status}).`, "image");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const check = checkImage(bytes);
+  if (!check.ok) {
+    await deleteFile(url).catch(() => {});
+    throw new AdminInputError(check.error, "image");
+  }
+
+  let stored = { key: url, url };
+  const meta = await sharp(bytes).metadata().catch(() => null);
+  const ready = check.type === "image/webp" && meta?.width && meta.height && Math.max(meta.width, meta.height) <= PRODUCT_UPLOAD_MAX_PX;
+  if (!ready) {
+    const image = await toWebp(bytes, PRODUCT_UPLOAD_MAX_PX, PRODUCT_UPLOAD_MAX_PX);
+    if (!image.ok) throw new AdminInputError(image.error, "image");
+    try {
+      stored = await saveFile(descriptiveKey(`products/${productId}`, product.name, image.ext), image.bytes, image.type);
+    } catch (error) {
+      throw new AdminInputError(describeStorageError(error), "image");
+    }
+    await deleteFile(url).catch(() => {});
+  }
+
+  return prisma.productImage.create({
+    data: {
+      productId,
+      url: stored.url,
+      storageKey: stored.key,
+      alt: product.name.slice(0, 200),
+      sortOrder: (product.images[0]?.sortOrder ?? -1) + 1,
+    },
+  });
+}
 
 /** Uploaded product photos are stored as WebP within 1000 × 1000 pixels. */
 export const PRODUCT_UPLOAD_MAX_PX = 1000;

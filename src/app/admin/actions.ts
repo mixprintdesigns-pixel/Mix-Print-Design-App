@@ -3,12 +3,14 @@
 import { redirect } from "next/navigation";
 import { refresh, updateTag } from "next/cache";
 import { z } from "zod";
-import { requireStaff } from "@/lib/auth/session";
+import { getCurrentUser, requireStaff } from "@/lib/auth/session";
+import { blobStoreIdFromToken } from "@/lib/storage/blob-direct";
 import { generateCategoryImage, generateProductImage, ImageGenerationError, type ImageView } from "@/lib/images/generate";
 import { prisma } from "@/lib/db";
 import { CATALOG_TAG } from "@/lib/catalog/queries";
 import {
   addProductImage,
+  attachUploadedProductImage,
   PRODUCT_UPLOAD_MAX_PX,
   AdminInputError,
   deleteProductImage,
@@ -94,9 +96,36 @@ export async function uploadProductImageAction(formData: FormData): Promise<Admi
       await addProductImage(productId, new Uint8Array(await file.arrayBuffer()), undefined, { maxPx: PRODUCT_UPLOAD_MAX_PX });
     });
   } catch (error) {
-    // Never crash the admin page over one image: show what went wrong instead.
+    // Never crash the admin page over one image: show the exact error instead.
     console.error("Product image upload failed:", error);
-    return { error: "The image could not be uploaded because of a server error. Please try again; if it keeps happening, check Vercel → Logs." };
+    return { error: `Server error: ${(error as Error).message || String(error)}` };
+  }
+  if (!result.error) catalogChanged();
+  return result;
+}
+
+/** Checks, before a direct upload starts, that it can work; returns the exact reason if not. */
+export async function checkProductImageUploadAction(productId: string): Promise<AdminResult> {
+  const user = await getCurrentUser();
+  if (user?.role !== "ADMIN") return { error: "Your admin session has ended. Please sign in again." };
+  if (!(await prisma.product.findUnique({ where: { id: id.parse(productId) }, select: { id: true } }))) return { error: "This product no longer exists." };
+  if (!blobStoreIdFromToken(process.env.BLOB_READ_WRITE_TOKEN)) {
+    return { error: "BLOB_READ_WRITE_TOKEN is missing or not a Vercel Blob read-write token. Reconnect the Blob store with the read-write token option, then redeploy." };
+  }
+  return {};
+}
+
+/** Records an image the browser uploaded straight to Vercel Blob. */
+export async function attachProductImageAction(productId: string, url: string): Promise<AdminResult> {
+  await requireAdmin();
+  let result: AdminResult;
+  try {
+    result = await run(async () => {
+      await attachUploadedProductImage(id.parse(productId), z.string().url().max(1000).parse(url));
+    });
+  } catch (error) {
+    console.error("Attaching uploaded product image failed:", error);
+    return { error: `Server error: ${(error as Error).message || String(error)}` };
   }
   if (!result.error) catalogChanged();
   return result;

@@ -6,6 +6,7 @@ import { ProductEditor } from "@/components/admin/product-editor";
 import { getAdminProduct } from "@/lib/admin/catalog-service";
 import { categoryChoices, toProductInput } from "@/lib/admin/editor-data";
 import { requireStaff } from "@/lib/auth/session";
+import { directUploadAvailable } from "@/lib/storage/blob-direct";
 
 // AI image generation can take up to a minute.
 export const maxDuration = 120;
@@ -43,7 +44,7 @@ export default async function EditProductPage({ params, searchParams }: PageProp
       )}
 
       <div className="mt-6 space-y-6">
-        <ImageManager productId={product.id} images={product.images} />
+        <ImageManager productId={product.id} images={product.images} directUpload={directUploadAvailable()} />
         {/* key: remount the editor with fresh ids after each save */}
         <ProductEditor
           key={product.updatedAt.toISOString()}
