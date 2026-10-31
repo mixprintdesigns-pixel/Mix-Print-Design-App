@@ -8,13 +8,18 @@ export type WebpImage = { ok: true; bytes: Uint8Array; type: "image/webp"; ext: 
 
 /**
  * Validates an uploaded JPG/PNG/WebP and converts it to a resized WebP (smaller files, faster pages).
- * Images wider than `maxWidth` are scaled down; EXIF orientation is applied and metadata is stripped.
+ * Images wider than `maxWidth` (or taller than `maxHeight`, when given) are scaled down, keeping their
+ * shape; EXIF orientation is applied and metadata is stripped.
  */
-export async function toWebp(bytes: Uint8Array, maxWidth = 1600): Promise<WebpImage> {
+export async function toWebp(bytes: Uint8Array, maxWidth = 1600, maxHeight?: number): Promise<WebpImage> {
   const check = checkImage(bytes);
   if (!check.ok) return check;
   try {
-    const output = await sharp(bytes).rotate().resize({ width: maxWidth, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+    const output = await sharp(bytes)
+      .rotate()
+      .resize({ width: maxWidth, height: maxHeight, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
     return { ok: true, bytes: new Uint8Array(output), type: "image/webp", ext: "webp" };
   } catch {
     return { ok: false, error: "This image could not be read. Try saving it again as JPG or PNG." };

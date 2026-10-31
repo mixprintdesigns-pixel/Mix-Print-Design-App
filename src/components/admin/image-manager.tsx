@@ -22,6 +22,25 @@ const isGenerated = (key?: string | null) => !!key && /(^|\/)ai-/.test(key);
 /** The view a generated image was made for, read from its file name (…-in-use-lahore-…, …-angle-lahore-…). */
 const viewOf = (key?: string | null) => (key?.includes("-in-use-lahore") ? "in-use" : key?.includes("-angle-lahore") ? "angle" : "front");
 
+const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp"];
+/** Vercel refuses requests over 4.5 MB, so bigger photos are shrunk in the browser before upload. */
+const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024;
+
+/** Returns the file as is, or a smaller JPEG copy (within 2000 × 2000 px) when it is too big to send. */
+async function shrinkForUpload(file: File): Promise<File> {
+  if (file.size <= MAX_UPLOAD_BYTES) return file;
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+  if (!blob) throw new Error("could not shrink");
+  return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
+}
+
 export function ImageManager({ productId, images }: { productId: string; images: ProductImage[] }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: "error" | "ok"; text: string } | null>(null);
@@ -39,11 +58,20 @@ export function ImageManager({ productId, images }: { productId: string; images:
       // One file per request keeps each upload under the server's size limit.
       for (const [i, file] of list.entries()) {
         setProgress(`Uploading ${i + 1} of ${list.length}…`);
-        const data = new FormData();
-        data.set("productId", productId);
-        data.set("file", file);
-        const result = await uploadProductImageAction(data);
-        if (result.error) failures.push(`${file.name}: ${result.error}`);
+        if (!UPLOAD_TYPES.includes(file.type)) {
+          failures.push(`${file.name}: use a JPG, PNG or WebP image.`);
+          continue;
+        }
+        try {
+          const data = new FormData();
+          data.set("productId", productId);
+          data.set("file", await shrinkForUpload(file));
+          const result = await uploadProductImageAction(data);
+          if (result.error) failures.push(`${file.name}: ${result.error}`);
+        } catch {
+          // e.g. the connection dropped or the request was refused: report it instead of crashing the page.
+          failures.push(`${file.name}: the upload did not reach the server. Check your connection, or try a smaller image.`);
+        }
       }
       setProgress(null);
       if (fileInput.current) fileInput.current.value = "";
@@ -83,7 +111,7 @@ export function ImageManager({ productId, images }: { productId: string; images:
           <h2 id="images-heading" className="text-lg font-bold">
             Images
           </h2>
-          <p className="text-sm text-muted">The first image is the main image. JPG, PNG or WebP, up to 4 MB each.</p>
+          <p className="text-sm text-muted">The first image is the main image. JPG, PNG or WebP; saved as WebP up to 1000 × 1000 px.</p>
         </div>
         <label className="btn-primary cursor-pointer">
           {pending && progress ? progress : "Upload images"}

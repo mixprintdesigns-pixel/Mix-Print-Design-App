@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { CATALOG_TAG } from "@/lib/catalog/queries";
 import {
   addProductImage,
+  PRODUCT_UPLOAD_MAX_PX,
   AdminInputError,
   deleteProductImage,
   moveCategory,
@@ -86,10 +87,17 @@ export async function uploadProductImageAction(formData: FormData): Promise<Admi
   await requireAdmin();
   const productId = id.parse(formData.get("productId"));
   const file = formData.get("file");
-  if (!(file instanceof File)) return { error: "Choose an image to upload." };
-  const result = await run(async () => {
-    await addProductImage(productId, new Uint8Array(await file.arrayBuffer()));
-  });
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose an image to upload." };
+  let result: AdminResult;
+  try {
+    result = await run(async () => {
+      await addProductImage(productId, new Uint8Array(await file.arrayBuffer()), undefined, { maxPx: PRODUCT_UPLOAD_MAX_PX });
+    });
+  } catch (error) {
+    // Never crash the admin page over one image: show what went wrong instead.
+    console.error("Product image upload failed:", error);
+    return { error: "The image could not be uploaded because of a server error. Please try again; if it keeps happening, check Vercel → Logs." };
+  }
   if (!result.error) catalogChanged();
   return result;
 }

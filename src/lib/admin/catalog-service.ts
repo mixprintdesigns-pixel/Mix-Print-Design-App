@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { descriptiveKey, toWebp } from "@/lib/storage/webp";
+import { describeStorageError } from "@/lib/storage/errors";
 import type { CategoryData, FieldErrorMap, ProductData } from "./product-input";
 
 /** A problem the admin can fix; `field` points at the input to highlight. */
@@ -157,8 +158,11 @@ export async function deleteProduct(id: string): Promise<"deleted" | "archived">
 
 // ─── Product images ──────────────────────────────────────────────────────────
 
-export async function addProductImage(productId: string, bytes: Uint8Array, alt?: string) {
-  const image = await toWebp(bytes);
+/** Uploaded product photos are stored as WebP within 1000 × 1000 pixels. */
+export const PRODUCT_UPLOAD_MAX_PX = 1000;
+
+export async function addProductImage(productId: string, bytes: Uint8Array, alt?: string, opts: { maxPx?: number } = {}) {
+  const image = opts.maxPx ? await toWebp(bytes, opts.maxPx, opts.maxPx) : await toWebp(bytes);
   if (!image.ok) throw new AdminInputError(image.error, "image");
   const product = await prisma.product.findUnique({
     where: { id: productId },
@@ -167,7 +171,12 @@ export async function addProductImage(productId: string, bytes: Uint8Array, alt?
   if (!product) throw new AdminInputError("This product no longer exists.");
 
   const label = alt?.trim() || product.name;
-  const stored = await saveFile(descriptiveKey(`products/${productId}`, label, image.ext), image.bytes, image.type);
+  let stored;
+  try {
+    stored = await saveFile(descriptiveKey(`products/${productId}`, label, image.ext), image.bytes, image.type);
+  } catch (error) {
+    throw new AdminInputError(describeStorageError(error), "image");
+  }
   return prisma.productImage.create({
     data: {
       productId,
