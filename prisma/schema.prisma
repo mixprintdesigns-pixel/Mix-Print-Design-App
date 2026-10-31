@@ -905,3 +905,52 @@ model OrderPaymentRecord {
   @@index([orderId])
   @@index([receivedAt])
 }
+
+// ─── Blog ────────────────────────────────────────────────────────────────────
+// Added as separate tables. productIds are plain product ids, so the Product table is not changed.
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  SCHEDULED // becomes visible at publishAt
+}
+
+model BlogCategory {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  posts       BlogPost[]
+}
+
+model BlogPost {
+  id             String         @id @default(cuid())
+  title          String
+  slug           String         @unique
+  excerpt        String         @default("")
+  content        String         @default("") // Markdown subset, see lib/blog/content.ts
+  categoryId     String?
+  category       BlogCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tags           String[]       @default([])
+  authorName     String         @default("Mix Print Design")
+  coverUrl       String?
+  coverAlt       String?
+  status         BlogPostStatus @default(DRAFT)
+  publishAt      DateTime? // for Scheduled
+  publishedAt    DateTime?
+  seoTitle       String?
+  seoDescription String?
+  focusKeyword   String?
+  canonicalUrl   String?
+  ogImageUrl     String?
+  faqs           Json           @default("[]") // [{ question, answer }]
+  productIds     String[]       @default([])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+}

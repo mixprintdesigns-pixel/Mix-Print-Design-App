@@ -326,11 +326,12 @@ test.describe("navigation", () => {
     ["Services", /\/services$/],
     ["Products", /\/products$/],
     ["Affiliate Program", /\/affiliate$/],
+    ["Blog", /\/blog$/],
     ["About Us", /\/about$/],
     ["Contact Us", /\/contact$/],
   ] as const;
 
-  test("the header shows exactly the six main pages, in order", async ({ page, isMobile }) => {
+  test("the header shows exactly the main pages, in order", async ({ page, isMobile }) => {
     await page.goto("/");
     const nav = isMobile ? page.getByRole("navigation", { name: "Mobile" }) : page.getByRole("navigation", { name: "Main" });
     if (isMobile) await page.getByRole("button", { name: "Open menu" }).click();

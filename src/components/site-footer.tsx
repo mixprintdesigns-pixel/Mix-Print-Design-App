@@ -54,6 +54,11 @@ export async function SiteFooter() {
               </a>
             </p>
             <p>
+              <Link href="/blog" className="hover:text-foreground">
+                Blog: printing tips &amp; guides
+              </Link>
+            </p>
+            <p>
               <Link href="/track" className="hover:text-foreground">
                 Track your order
               </Link>

@@ -11,6 +11,7 @@ const PAGES: NavLink[] = [
   { href: "/services", label: "Services" },
   { href: "/products", label: "Products" },
   { href: "/affiliate", label: "Affiliate Program" },
+  { href: "/blog", label: "Blog" },
   { href: "/about", label: "About Us" },
   { href: "/contact", label: "Contact Us" },
 ];
