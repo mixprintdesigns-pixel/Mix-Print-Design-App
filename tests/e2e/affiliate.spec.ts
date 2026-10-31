@@ -53,7 +53,7 @@ test.describe("affiliate journey", () => {
     const affiliateEmail = `affiliate-${run}@example.com`;
     const buyerEmail = `buyer-${run}@example.com`;
 
-    // 1. Apply (signed-in customer) and verify email + mobile
+    // 1. Apply (signed-in customer) and verify the email (SMS verification is off by default)
     const mobile = randomMobile();
     await register(page, "Sana Malik", affiliateEmail, mobile.local);
     await page.goto("/affiliate");
@@ -69,7 +69,7 @@ test.describe("affiliate journey", () => {
     await page.getByRole("button", { name: "Submit application" }).click();
     await expect(page).toHaveURL(/\/affiliate\/verify$/);
     await page.getByLabel("Email code").fill(await latestCode("email", affiliateEmail));
-    await page.getByLabel("Mobile code (SMS)").fill(await latestCode("sms", mobile.e164));
+    await expect(page.getByLabel("Mobile code (SMS)")).toHaveCount(0);
     await page.getByRole("button", { name: "Verify & activate" }).click();
     await expect(page).toHaveURL(/\/affiliate\/dashboard\?joined=1$/);
     await expect(page.getByTestId("affiliate-status")).toContainText("under review");
@@ -158,7 +158,8 @@ test.describe("affiliate journey", () => {
 test.describe("affiliate signup verification", () => {
   test.skip(({ isMobile }) => isMobile, "Covered on desktop");
 
-  test("new visitor: account is activated only after both email and SMS codes", async ({ browser }) => {
+  // SMS_VERIFICATION_ENABLED is not set here, so only the email code is used; the email + SMS flow is unit-tested.
+  test("new visitor: account is activated only after the email code", async ({ browser }) => {
     const context = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": `10.6.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` } });
     const page = await context.newPage();
     const run = Date.now().toString(36);
@@ -173,15 +174,16 @@ test.describe("affiliate signup verification", () => {
     await page.getByLabel("Password").fill("MixPrint2026!");
     await page.getByLabel("How will you promote Mix Print Design?").fill("TikTok videos about small businesses.");
     await page.getByLabel(/I agree to the/).check();
-    await page.getByRole("button", { name: "Create account & send codes" }).click();
+    await expect(page.getByText("We will send a 6-digit code to your email. Your affiliate account is activated after you enter it.")).toBeVisible();
+    await page.getByRole("button", { name: "Create account & send code" }).click();
     await expect(page.getByText("Enter a valid mobile number")).toBeVisible();
 
     await page.getByLabel("Mobile number (Pakistan)").fill(mobile.local);
     await page.getByLabel("Wallet mobile number").fill(mobile.local);
-    await page.getByRole("button", { name: "Create account & send codes" }).click();
+    await page.getByRole("button", { name: "Create account & send code" }).click();
     await expect(page).toHaveURL(/\/affiliate\/verify$/);
-    await expect(page.getByText(/We sent two 6-digit codes/)).toBeVisible();
-    await expect(page.getByText(`Sent to ${mobile.e164.slice(0, 4)}******${mobile.e164.slice(-3)}`)).toBeVisible();
+    await expect(page.getByText(/We sent a 6-digit code to your email/)).toBeVisible();
+    await expect(page.getByLabel("Mobile code (SMS)")).toHaveCount(0);
     // Not signed in and no account yet
     await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 
@@ -189,15 +191,12 @@ test.describe("affiliate signup verification", () => {
     await expect(page.getByRole("button", { name: /Resend code in \d+s/ }).first()).toBeDisabled();
 
     const emailCode = await latestCode("email", email);
-    const smsCode = await latestCode("sms", mobile.e164);
-    const wrong = smsCode === "000000" ? "111111" : "000000";
-    await page.getByLabel("Email code").fill(emailCode);
-    await page.getByLabel("Mobile code (SMS)").fill(wrong);
+    const wrong = emailCode === "000000" ? "111111" : "000000";
+    await page.getByLabel("Email code").fill(wrong);
     await page.getByRole("button", { name: "Verify & activate" }).click();
     await expect(page.getByText("That code is not correct. 4 tries left.")).toBeVisible();
-    await expect(page.getByText("✓ Verified")).toBeVisible(); // email accepted
 
-    await page.getByLabel("Mobile code (SMS)").fill(smsCode);
+    await page.getByLabel("Email code").fill(emailCode);
     await page.getByRole("button", { name: "Verify & activate" }).click();
     await expect(page).toHaveURL(/\/affiliate\/dashboard\?joined=1$/);
     await expect(page.getByText("Thanks for applying!")).toBeVisible();
@@ -213,11 +212,11 @@ test.describe("affiliate signup verification", () => {
     await other.getByLabel("Wallet mobile number").fill(mobile.local);
     await other.getByLabel("How will you promote Mix Print Design?").fill("Facebook groups in Karachi.");
     await other.getByLabel(/I agree to the/).check();
-    await other.getByRole("button", { name: "Create account & send codes" }).click();
+    await other.getByRole("button", { name: "Create account & send code" }).click();
     await expect(other.getByText("This mobile number is already used by another account.")).toBeVisible();
     await other.getByLabel("Email").fill(email);
     await other.getByLabel("Mobile number (Pakistan)").fill(randomMobile().local);
-    await other.getByRole("button", { name: "Create account & send codes" }).click();
+    await other.getByRole("button", { name: "Create account & send code" }).click();
     await expect(other.getByText(/This email is already registered/)).toBeVisible();
   });
 

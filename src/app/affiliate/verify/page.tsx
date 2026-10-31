@@ -11,7 +11,7 @@ export default function VerifyPage() {
   return (
     <div className="mx-auto max-w-lg px-4 py-12">
       <h1 className="text-3xl font-bold">Verify your account</h1>
-      <p className="mt-2 text-muted">Enter the codes to activate your Mix Print Design affiliate account.</p>
+      <p className="mt-2 text-muted">Enter your verification code to activate your Mix Print Design affiliate account.</p>
       <div className="card mt-8 p-6">
         <Suspense fallback={<div className="h-72 animate-pulse" />}>
           <Verify />

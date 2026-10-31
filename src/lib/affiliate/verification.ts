@@ -10,7 +10,9 @@ import { hashIp, applyAsAffiliate } from "./service";
 import type { PayoutMethodValue } from "./validation";
 
 // Affiliate signup verification: a 6-digit code by email and a separate one by SMS.
-// Nothing is activated until both are confirmed.
+// Nothing is activated until both are confirmed. While SMS is not set up
+// (SMS_VERIFICATION_ENABLED is not "true"), only the email code is sent and checked; the mobile
+// number is still saved for payouts, but it is not marked as verified.
 
 export const CODE_TTL_MS = 10 * 60 * 1000;
 export const RESEND_WAIT_MS = 60 * 1000;
@@ -20,6 +22,11 @@ const SIGNUP_TTL_MS = 24 * 60 * 60 * 1000;
 const SIGNUPS_PER_IP_PER_HOUR = 10;
 
 export type Channel = "email" | "phone";
+
+/** SMS codes are used only when SMS_VERIFICATION_ENABLED=true. */
+export function smsVerificationEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env.SMS_VERIFICATION_ENABLED?.trim().toLowerCase() === "true";
+}
 
 /** A problem to show the visitor in plain language; `field` points at the input. */
 export class VerificationError extends Error {
@@ -129,6 +136,7 @@ export async function startSignup(
     : null;
   const emailAlreadyVerified = Boolean(user?.emailVerifiedAt && user.email === input.email);
   const phoneAlreadyVerified = Boolean(user?.phoneVerifiedAt && user.phone === input.phone);
+  const needsPhoneCode = smsVerificationEnabled() && !phoneAlreadyVerified;
 
   // Starting again replaces any unfinished signup for the same person.
   await prisma.affiliateSignup.deleteMany({
@@ -151,14 +159,14 @@ export async function startSignup(
     },
   });
 
-  if (emailAlreadyVerified && phoneAlreadyVerified) {
+  if (emailAlreadyVerified && !needsPhoneCode) {
     await completeSignup(signup.id, now);
     return { token, signupId: signup.id, completed: true };
   }
 
   try {
     if (!emailAlreadyVerified) await deliverCode(signup.id, "email", transports, now, { initial: true });
-    if (!phoneAlreadyVerified) await deliverCode(signup.id, "phone", transports, now, { initial: true });
+    if (needsPhoneCode) await deliverCode(signup.id, "phone", transports, now, { initial: true });
   } catch (error) {
     await prisma.affiliateSignup.delete({ where: { id: signup.id } }).catch(() => {});
     throw error;
@@ -219,6 +227,7 @@ async function findActive(token: string, now: Date) {
 
 export async function resendCode(token: string, channel: Channel, transports: Transports = defaultTransports(), now = new Date()) {
   const signup = await findActive(token, now);
+  if (channel === "phone" && !smsVerificationEnabled()) throw new VerificationError("SMS codes are not used right now.", channel);
   if ((channel === "email" ? signup.emailVerifiedAt : signup.phoneVerifiedAt) !== null) {
     throw new VerificationError(channel === "email" ? "Your email is already verified." : "Your mobile number is already verified.", channel);
   }
@@ -289,17 +298,22 @@ async function checkChannel(
 export async function verifyCodes(token: string, codes: { email: string; phone: string }, now = new Date()): Promise<VerifyResult> {
   const signup = await findActive(token, now);
   const email = await checkChannel(signup, "email", codes.email.trim(), now);
-  const phone = await checkChannel(signup, "phone", codes.phone.trim(), now);
+  const phone = smsVerificationEnabled()
+    ? await checkChannel(signup, "phone", codes.phone.trim(), now)
+    : { outcome: "verified" as const, attemptsLeft: MAX_ATTEMPTS };
   if (email.outcome === "verified" && phone.outcome === "verified") {
     return { done: true, ...(await completeSignup(signup.id, now)) };
   }
   return { done: false, email: email.outcome, phone: phone.outcome, attemptsLeft: { email: email.attemptsLeft, phone: phone.attemptsLeft } };
 }
 
-/** Creates (or updates) the account with verified email and mobile, then submits the affiliate application. */
+/**
+ * Creates (or updates) the account with the verified email and the mobile number, then submits the
+ * affiliate application. The number is marked verified only if it was confirmed by SMS.
+ */
 async function completeSignup(signupId: string, now: Date): Promise<{ userId: string; isNewAccount: boolean }> {
   const signup = await prisma.affiliateSignup.findUniqueOrThrow({ where: { id: signupId } });
-  if (!signup.emailVerifiedAt || !signup.phoneVerifiedAt) throw new Error("Signup is not fully verified");
+  if (!signup.emailVerifiedAt || (smsVerificationEnabled() && !signup.phoneVerifiedAt)) throw new Error("Signup is not fully verified");
   // Someone may have registered the same email or number while this signup was pending.
   await assertAvailable(signup.email, signup.phone, signup.userId ?? undefined);
 
@@ -337,7 +351,7 @@ export async function getSignupStatus(token: string | null | undefined, now = ne
     email: maskEmail(signup.email),
     phone: maskPhone(signup.phone),
     needsEmail: !signup.emailVerifiedAt,
-    needsPhone: !signup.phoneVerifiedAt,
+    needsPhone: smsVerificationEnabled() && !signup.phoneVerifiedAt,
     emailResendIn: wait(signup.emailLastSentAt),
     phoneResendIn: wait(signup.phoneLastSentAt),
   };

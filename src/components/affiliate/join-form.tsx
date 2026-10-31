@@ -23,18 +23,21 @@ function AccountField({ id, label, error, ...input }: { id: string; label: strin
 
 /**
  * Affiliate signup. `newAccount` shows name, email and password for visitors without an account;
- * everyone gives a mobile number, which is verified by SMS (and the email by code) before activation.
+ * everyone gives a mobile number (for payouts). The email is verified by code; the number is verified
+ * by SMS only when `smsVerification` is on.
  */
 export function JoinForm({
   phone,
   name,
   reapplying,
   newAccount = false,
+  smsVerification = false,
 }: {
   phone: string | null;
   name: string;
   reapplying: boolean;
   newAccount?: boolean;
+  smsVerification?: boolean;
 }) {
   const [state, formAction, pending] = useActionState<AffiliateFormState, FormData>(applyAction, {});
   const errors = state.errors ?? {};
@@ -75,10 +78,14 @@ export function JoinForm({
         {newAccount && (
           <AccountField id="password" label="Password" type="password" autoComplete="new-password" error={errors.password} />
         )}
-        <p className="text-xs text-muted">
-          We will send a 6-digit code {newAccount ? "to your email and another" : "to confirm your number"} by SMS. Your affiliate account is
-          activated only after you enter {newAccount ? "both codes" : "the code"}.
-        </p>
+        {smsVerification ? (
+          <p className="text-xs text-muted">
+            We will send a 6-digit code {newAccount ? "to your email and another" : "to confirm your number"} by SMS. Your affiliate account is
+            activated only after you enter {newAccount ? "both codes" : "the code"}.
+          </p>
+        ) : (
+          <p className="text-xs text-muted">We will send a 6-digit code to your email. Your affiliate account is activated after you enter it.</p>
+        )}
       </fieldset>
       <PayoutFields errors={errors} defaults={{ payoutAccount: phone, payoutAccountName: name }} />
       <div>
@@ -114,7 +121,13 @@ export function JoinForm({
         {errors.agreeTerms && <p className="field-error">{errors.agreeTerms}</p>}
       </div>
       <button className="btn-primary w-full sm:w-auto" disabled={pending}>
-        {pending ? "Sending codes…" : reapplying ? "Apply again" : newAccount ? "Create account & send codes" : "Submit application"}
+        {pending
+          ? smsVerification ? "Sending codes…" : "Sending code…"
+          : reapplying
+            ? "Apply again"
+            : newAccount
+              ? smsVerification ? "Create account & send codes" : "Create account & send code"
+              : "Submit application"}
       </button>
     </form>
   );

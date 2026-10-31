@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { JoinForm } from "@/components/affiliate/join-form";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getAffiliateForUser, getUserPhone } from "@/lib/affiliate/service";
+import { smsVerificationEnabled } from "@/lib/affiliate/verification";
 
 export const metadata: Metadata = { title: "Join the affiliate program", robots: { index: false } };
 
@@ -35,7 +36,7 @@ async function Join() {
           </Link>
           .
         </p>
-        <JoinForm phone={null} name="" reapplying={false} newAccount />
+        <JoinForm phone={null} name="" reapplying={false} newAccount smsVerification={smsVerificationEnabled()} />
       </>
     );
   }
@@ -48,7 +49,12 @@ async function Join() {
           Your previous application was not approved{affiliate.adminNote ? `: ${affiliate.adminNote}` : "."} You can apply again.
         </p>
       )}
-      <JoinForm phone={await getUserPhone(user.id)} name={user.name} reapplying={affiliate?.status === "REJECTED"} />
+      <JoinForm
+        phone={await getUserPhone(user.id)}
+        name={user.name}
+        reapplying={affiliate?.status === "REJECTED"}
+        smsVerification={smsVerificationEnabled()}
+      />
     </>
   );
 }

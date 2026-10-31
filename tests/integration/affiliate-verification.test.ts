@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
 import { registerUser } from "@/lib/auth/service";
@@ -44,6 +44,16 @@ async function input(overrides: Partial<SignupInput> = {}): Promise<SignupInput>
 }
 
 beforeEach(resetDatabase);
+
+// These tests cover the full email + SMS flow, used when SMS_VERIFICATION_ENABLED=true.
+// The email-only flow (the default while SMS is not set up) is in affiliate-email-only-signup.test.ts.
+const smsSetting = process.env.SMS_VERIFICATION_ENABLED;
+beforeAll(() => {
+  process.env.SMS_VERIFICATION_ENABLED = "true";
+});
+afterAll(() => {
+  process.env.SMS_VERIFICATION_ENABLED = smsSetting;
+});
 
 describe("new affiliate signup", () => {
   it("sends both codes, stores only hashes, and creates nothing until both are verified", async () => {
