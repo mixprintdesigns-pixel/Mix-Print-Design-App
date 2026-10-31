@@ -29,7 +29,7 @@ export function localBusinessJsonLd(extra: JsonLdObject = {}): JsonLdObject {
     "@id": `${SITE_URL}/#business`,
     name: BUSINESS.name,
     url: SITE_URL,
-    logo: absoluteUrl("/brand/mix-print-design-badge.png"),
+    logo: absoluteUrl("/brand/mix-print-design-icon.png"),
     image: absoluteUrl("/og-image.png"),
     email: BUSINESS.email,
     telephone: BUSINESS.phoneTel,

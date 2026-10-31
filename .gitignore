@@ -50,8 +50,9 @@ next-env.d.ts
 /blob-report/
 /playwright/.cache/
 
-# local backups
-/backups/
+# local backups (database dumps); old logo and icon files are kept in the repository
+/backups/*
+!/backups/brand-assets-*/
 
 # uploaded files (local storage driver)
 /storage/
