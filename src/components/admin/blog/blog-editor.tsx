@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { upload as uploadToBlob } from "@vercel/blob/client";
 import {
   attachBlogImageAction,
@@ -11,10 +11,9 @@ import {
   uploadBlogImageAction,
   type BlogImageResult,
 } from "@/app/admin/blog-actions";
-import { ArticleBody } from "@/components/blog/article-body";
-import { parseBlocks, readingMinutes, wordCount } from "@/lib/blog/content";
 import { autoMetaDescription, autoSeoTitle, META_DESCRIPTION_MAX, SEO_TITLE_IDEAL, SEO_TITLE_MAX, seoChecklist } from "@/lib/blog/seo";
 import { toSlug } from "@/lib/slug";
+import { ArticleEditor, type LinkTarget } from "./article-editor";
 import { prepareBlogImage } from "./prepare-image";
 
 export type BlogEditorValues = {
@@ -46,6 +45,8 @@ type Props = {
   directUpload: boolean;
   siteUrl: string;
   publicUrl: string | null;
+  /** Pages the Article box's link picker offers. */
+  linkTargets: LinkTarget[];
 };
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e)) || "unknown error";
@@ -105,82 +106,18 @@ function Field({ label, htmlFor, hint, error, children, extra }: { label: string
   );
 }
 
-export function BlogEditor({ postId, initial, categories, products, directUpload, siteUrl, publicUrl }: Props) {
+export function BlogEditor({ postId, initial, categories, products, directUpload, siteUrl, publicUrl, linkTargets }: Props) {
   const router = useRouter();
   const [v, setV] = useState(initial);
   const [slugEdited, setSlugEdited] = useState(Boolean(postId));
-  const [tab, setTab] = useState<"write" | "preview">("write");
   const [saving, startSaving] = useTransition();
   const [result, setResult] = useState<{ kind: "ok" | "error"; text: string; field?: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [inlineImage, setInlineImage] = useState<{ open: boolean; alt: string; error: string | null }>({ open: false, alt: "", error: null });
   const [productQuery, setProductQuery] = useState("");
-  const textarea = useRef<HTMLTextAreaElement>(null);
-  const inlineFile = useRef<HTMLInputElement>(null);
 
   const set = <K extends keyof BlogEditorValues>(key: K, value: BlogEditorValues[K]) => setV((s) => ({ ...s, [key]: value }));
-  const blocks = useMemo(() => parseBlocks(v.content), [v.content]);
   const checklist = useMemo(() => seoChecklist(v, siteUrl), [v, siteUrl]);
-  const words = useMemo(() => wordCount(v.content), [v.content]);
   const fieldError = (field: string) => (result?.kind === "error" && result.field === field ? result.text : undefined);
-
-  // ─── Toolbar ───────────────────────────────────────────────────────────────
-  function edit(fn: (text: string, start: number, end: number) => { text: string; cursor: [number, number] }) {
-    const el = textarea.current;
-    const start = el?.selectionStart ?? v.content.length;
-    const end = el?.selectionEnd ?? v.content.length;
-    const next = fn(v.content, start, end);
-    set("content", next.text);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(...next.cursor);
-    });
-  }
-  const wrap = (before: string, after: string, placeholder: string) =>
-    edit((t, s, e) => {
-      const selected = t.slice(s, e) || placeholder;
-      return { text: t.slice(0, s) + before + selected + after + t.slice(e), cursor: [s + before.length, s + before.length + selected.length] };
-    });
-  const prefixLines = (prefix: (i: number) => string) =>
-    edit((t, s, e) => {
-      const lineStart = t.lastIndexOf("\n", s - 1) + 1;
-      const lineEnd = t.indexOf("\n", e) === -1 ? t.length : t.indexOf("\n", e);
-      const lines = t.slice(lineStart, lineEnd).split("\n");
-      const changed = lines.map((l, i) => prefix(i) + l.replace(/^(#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/, "")).join("\n");
-      return { text: t.slice(0, lineStart) + changed + t.slice(lineEnd), cursor: [lineStart, lineStart + changed.length] };
-    });
-  const insertBlock = (block: string) =>
-    edit((t, s) => {
-      const before = t.slice(0, s).replace(/\s*$/, "");
-      const after = t.slice(s).replace(/^\s*/, "");
-      const text = `${before}${before ? "\n\n" : ""}${block}\n\n${after}`;
-      const cursor = before.length + (before ? 2 : 0) + block.length;
-      return { text, cursor: [cursor, cursor] };
-    });
-  function addLink() {
-    const url = window.prompt("Link address, e.g. /products/offset-printing or https://…");
-    if (url?.trim()) wrap("[", `](${url.trim()})`, "link text");
-  }
-
-  async function insertImage(file: File | undefined) {
-    if (!file) return;
-    const alt = inlineImage.alt.trim();
-    if (!alt) {
-      setInlineImage((s) => ({ ...s, error: "Write the alt text first (what the image shows)." }));
-      return;
-    }
-    setBusy("Uploading image…");
-    try {
-      const img = await uploadImage(file, "inline", alt, directUpload);
-      insertBlock(`![${alt.replace(/[[\]]/g, "")}](${img.url} =${img.width}x${img.height})`);
-      setInlineImage({ open: false, alt: "", error: null });
-    } catch (e) {
-      setInlineImage((s) => ({ ...s, error: `Upload failed: ${errorText(e)}` }));
-    } finally {
-      setBusy(null);
-      if (inlineFile.current) inlineFile.current.value = "";
-    }
-  }
 
   async function uploadInto(field: "coverUrl" | "ogImageUrl", file: File | undefined) {
     if (!file) return;
@@ -221,7 +158,6 @@ export function BlogEditor({ postId, initial, categories, products, directUpload
     });
   }
 
-  const tool = "rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-semibold hover:border-brand disabled:opacity-50";
   const filteredProducts = products.filter((p) => !productQuery.trim() || `${p.name} ${p.category}`.toLowerCase().includes(productQuery.trim().toLowerCase()));
 
   return (
@@ -300,97 +236,16 @@ export function BlogEditor({ postId, initial, categories, products, directUpload
           </Field>
         </section>
 
-        {/* ─── Content ─── */}
-        <section className="card p-5" aria-labelledby="content-heading">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="content-heading" className="font-bold">
-              Article
-            </h2>
-            <div className="flex rounded-lg border border-border p-0.5 text-sm" role="tablist">
-              {(["write", "preview"] as const).map((t) => (
-                <button key={t} type="button" role="tab" aria-selected={tab === t} className={`rounded-md px-3 py-1 font-semibold ${tab === t ? "bg-brand text-white" : "text-muted"}`} onClick={() => setTab(t)}>
-                  {t === "write" ? "Write" : "Preview"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {tab === "write" ? (
-            <>
-              <div className="mt-3 flex flex-wrap gap-1.5" role="toolbar" aria-label="Formatting">
-                <button type="button" className={tool} onClick={() => prefixLines(() => "## ")}>
-                  H2
-                </button>
-                <button type="button" className={tool} onClick={() => prefixLines(() => "### ")}>
-                  H3
-                </button>
-                <button type="button" className={tool} onClick={() => wrap("**", "**", "bold text")} aria-label="Bold">
-                  B
-                </button>
-                <button type="button" className={`${tool} italic`} onClick={() => wrap("*", "*", "italic text")} aria-label="Italic">
-                  I
-                </button>
-                <button type="button" className={tool} onClick={() => prefixLines(() => "- ")}>
-                  • List
-                </button>
-                <button type="button" className={tool} onClick={() => prefixLines((i) => `${i + 1}. `)}>
-                  1. List
-                </button>
-                <button type="button" className={tool} onClick={addLink}>
-                  Link
-                </button>
-                <button type="button" className={tool} onClick={() => prefixLines(() => "> ")}>
-                  Quote
-                </button>
-                <button type="button" className={tool} onClick={() => insertBlock("| Column 1 | Column 2 |\n| --- | --- |\n| Text | Text |\n| Text | Text |")}>
-                  Table
-                </button>
-                <button type="button" className={tool} onClick={() => setInlineImage((s) => ({ ...s, open: !s.open, error: null }))} aria-expanded={inlineImage.open}>
-                  Image
-                </button>
-              </div>
-
-              {inlineImage.open && (
-                <div className="mt-3 space-y-2 rounded-lg border border-border bg-surface p-3" data-testid="insert-image">
-                  <p className="text-xs text-muted">The image is added where the cursor is, saved as WebP up to 1600 px wide.</p>
-                  <label className="block">
-                    <span className="label">Alt text (required)</span>
-                    <input className="input" value={inlineImage.alt} maxLength={200} placeholder="What the image shows" onChange={(e) => setInlineImage((s) => ({ ...s, alt: e.target.value, error: null }))} />
-                  </label>
-                  <label className="btn-secondary inline-flex cursor-pointer px-3 py-1.5 text-sm">
-                    Choose image and insert
-                    <input ref={inlineFile} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={!!busy} onChange={(e) => insertImage(e.target.files?.[0])} aria-label="Image to insert" />
-                  </label>
-                  {inlineImage.error && (
-                    <p className="field-error" role="alert">
-                      {inlineImage.error}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <textarea
-                ref={textarea}
-                id="content"
-                aria-label="Article text"
-                rows={22}
-                className="input mt-3 font-mono text-sm leading-relaxed"
-                value={v.content}
-                onChange={(e) => set("content", e.target.value)}
-                placeholder={"Start with a short introduction that uses your focus keyword.\n\n## A heading\n\nText, **bold**, [a link](/products) …"}
-              />
-              <p className="mt-1 text-xs text-muted">
-                {words} words · {readingMinutes(v.content)} min read · Tip: use the toolbar, or type ## for a heading, - for a list, **bold**.
-              </p>
-              {fieldError("content") && <p className="field-error">{fieldError("content")}</p>}
-            </>
-          ) : (
-            <div className="mt-4 rounded-lg border border-border p-5" data-testid="article-preview">
-              <p className="text-3xl font-bold">{v.title || "Untitled article"}</p>
-              {blocks.length ? <div className="mt-6"><ArticleBody blocks={blocks} /></div> : <p className="mt-4 text-muted">Nothing written yet.</p>}
-            </div>
-          )}
-        </section>
+        {/* ─── Content (visual editor) ─── */}
+        <ArticleEditor
+          value={v.content}
+          title={v.title}
+          onChange={(content) => set("content", content)}
+          postId={postId}
+          uploadImage={(file, alt) => uploadImage(file, "inline", alt, directUpload)}
+          linkTargets={linkTargets}
+          error={fieldError("content")}
+        />
 
         {/* ─── FAQ ─── */}
         <section className="card space-y-3 p-5" aria-labelledby="faq-heading">

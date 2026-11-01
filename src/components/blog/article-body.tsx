@@ -9,6 +9,27 @@ import { parseInline, type Block, type Inline } from "@/lib/blog/content";
 /** Our own images (uploads and Vercel Blob) are resized by Next.js; other https images are shown as they are. */
 const optimizable = (src: string) => src.startsWith("/") || /^https:\/\/[a-z0-9]+\.public\.blob\.vercel-storage\.com\//i.test(src);
 
+/**
+ * A link in an article (text or image). Our own pages open in the same tab and outside websites in a new one,
+ * unless the editor chose otherwise; outside links always get rel="noopener noreferrer".
+ */
+function SmartLink({ href, newTab, className, children }: { href: string; newTab?: boolean; className?: string; children: ReactNode }) {
+  const external = /^https?:/i.test(href);
+  const openNew = newTab ?? external;
+  if (href.startsWith("/") && !openNew) {
+    return (
+      <Link href={href} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <a href={href} className={className} {...(openNew ? { target: "_blank" } : {})} {...(external ? { rel: "noopener noreferrer" } : openNew ? { rel: "noopener" } : {})}>
+      {children}
+    </a>
+  );
+}
+
 function InlineNodes({ nodes }: { nodes: Inline[] }) {
   return (
     <>
@@ -35,19 +56,10 @@ function InlineNodes({ nodes }: { nodes: Inline[] }) {
               </code>
             );
           case "link":
-            return n.href.startsWith("/") ? (
-              <Link key={i} href={n.href} className="font-medium text-brand underline underline-offset-2 hover:no-underline">
+            return (
+              <SmartLink key={i} href={n.href} newTab={n.newTab} className="font-medium text-brand underline underline-offset-2 hover:no-underline">
                 <InlineNodes nodes={n.children} />
-              </Link>
-            ) : (
-              <a
-                key={i}
-                href={n.href}
-                className="font-medium text-brand underline underline-offset-2 hover:no-underline"
-                {...(/^https?:/.test(n.href) ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-              >
-                <InlineNodes nodes={n.children} />
-              </a>
+              </SmartLink>
             );
         }
       })}
@@ -117,25 +129,43 @@ export function ArticleBody({ blocks }: { blocks: Block[] }) {
                 </table>
               </div>
             );
-          case "image":
+          case "image": {
+            const img = optimizable(b.src) ? (
+              <Image
+                src={b.src}
+                alt={b.alt}
+                width={b.width ?? 1600}
+                height={b.height ?? 900}
+                sizes="(max-width: 768px) 100vw, 768px"
+                className={`h-auto w-full rounded-xl ${b.href ? "transition duration-200 group-hover:opacity-90 group-hover:shadow-lg" : ""}`}
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={b.src}
+                alt={b.alt}
+                width={b.width}
+                height={b.height}
+                loading="lazy"
+                decoding="async"
+                className={`h-auto w-full rounded-xl ${b.href ? "transition duration-200 group-hover:opacity-90 group-hover:shadow-lg" : ""}`}
+              />
+            );
+            // Older images show their alt text as the caption; images given a caption (even an empty one) show that.
+            const caption = b.caption !== undefined ? b.caption : b.alt;
             return (
               <figure key={i} className="my-6">
-                {optimizable(b.src) ? (
-                  <Image
-                    src={b.src}
-                    alt={b.alt}
-                    width={b.width ?? 1600}
-                    height={b.height ?? 900}
-                    sizes="(max-width: 768px) 100vw, 768px"
-                    className="h-auto w-full rounded-xl"
-                  />
+                {b.href ? (
+                  <SmartLink href={b.href} newTab={b.newTab} className="group block cursor-pointer rounded-xl">
+                    {img}
+                  </SmartLink>
                 ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={b.src} alt={b.alt} width={b.width} height={b.height} loading="lazy" decoding="async" className="h-auto w-full rounded-xl" />
+                  img
                 )}
-                {b.alt && <figcaption className="mt-2 text-center text-sm text-muted">{b.alt}</figcaption>}
+                {caption && <figcaption className="mt-2 text-center text-sm text-muted">{caption}</figcaption>}
               </figure>
             );
+          }
           case "rule":
             return <hr key={i} className="border-border" />;
         }

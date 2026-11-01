@@ -5,14 +5,16 @@ import { SITE_URL } from "@/lib/seo";
 import type { BlogEditorValues } from "@/components/admin/blog/blog-editor";
 import { dateToKarachiLocal, getAdminBlogPost } from "./admin";
 import { parseFaqs } from "./content";
+import { blogLinkTargets } from "./link-targets";
 
 // Everything the admin article editor needs.
 
 export async function blogEditorData(postId: string | null) {
-  const [post, categories, products] = await Promise.all([
+  const [post, categories, products, linkTargets] = await Promise.all([
     postId ? getAdminBlogPost(postId) : null,
     prisma.blogCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } }),
     prisma.product.findMany({ where: { status: { not: "ARCHIVED" } }, orderBy: { name: "asc" }, select: { id: true, name: true, category: { select: { name: true } } } }),
+    blogLinkTargets(),
   ]);
   if (postId && !post) return null;
 
@@ -45,5 +47,6 @@ export async function blogEditorData(postId: string | null) {
     directUpload: directUploadAvailable(),
     siteUrl: SITE_URL,
     publicUrl: live ? `/blog/${post.slug}` : null,
+    linkTargets,
   };
 }

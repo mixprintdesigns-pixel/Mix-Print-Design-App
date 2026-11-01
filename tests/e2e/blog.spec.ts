@@ -21,6 +21,17 @@ async function expectNotFound(page: Page, path: string) {
   await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute("content", /noindex/);
 }
 
+/** Pastes into the article editor as the browser would (plain text and/or HTML on the clipboard). */
+async function pasteInto(page: Page, data: { text?: string; html?: string }) {
+  await page.getByTestId("article-editor").click();
+  await page.getByTestId("article-editor").evaluate((el, d) => {
+    const clipboard = new DataTransfer();
+    if (d.text) clipboard.setData("text/plain", d.text);
+    if (d.html) clipboard.setData("text/html", d.html);
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true, cancelable: true }));
+  }, data);
+}
+
 const photo = (w: number, h: number) => sharp({ create: { width: w, height: h, channels: 3, background: "#00AFEF" } }).jpeg().toBuffer();
 
 test("write, publish, view, share and delete a blog article", async ({ page, request }) => {
@@ -47,8 +58,10 @@ test("write, publish, view, share and delete a blog article", async ({ page, req
   await expect(page.getByTestId("cover-preview")).toBeVisible();
   await page.getByLabel("Cover alt text (required)").fill("Flex banner on a shop front");
 
-  await page.getByLabel("Article text").fill(
-    [
+  // Paste an article copied as plain text with Markdown (e.g. from ChatGPT): it appears formatted.
+  const editor = page.getByTestId("article-editor");
+  await pasteInto(page, {
+    text: [
       `Flex banner printing is the fastest way to advertise. See our [flex products](/products/digital-printing).`,
       "## Materials",
       "Choose **star flex** or *Chinese flex*.",
@@ -58,14 +71,22 @@ test("write, publish, view, share and delete a blog article", async ({ page, req
       "- Eyelets\n- Pipes",
       "> Tip: check the proof.",
     ].join("\n\n"),
-  );
-  // An image inside the text needs alt text first
-  await page.getByRole("button", { name: "Image", exact: true }).click();
+  });
+  await expect(editor.getByRole("heading", { level: 2, name: "Materials" })).toBeVisible();
+  await expect(editor.locator("strong", { hasText: "star flex" })).toBeVisible();
+  await expect(editor.getByRole("cell", { name: "3 × 6 ft" })).toBeVisible();
+  await expect(editor).not.toContainText("##");
+  await expect(editor).not.toContainText("**");
+
+  // An image inside the text needs alt text first; it goes where the cursor is (here: the end)
+  await editor.click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.getByRole("button", { name: "Insert image" }).click();
   await page.getByLabel("Image to insert").setInputFiles({ name: "photo.jpg", mimeType: "image/jpeg", buffer: await photo(2400, 1600) });
   await expect(page.getByTestId("insert-image").getByRole("alert")).toContainText("Write the alt text first");
   await page.getByTestId("insert-image").getByLabel("Alt text (required)").fill("Printed flex banner with eyelets");
   await page.getByLabel("Image to insert").setInputFiles({ name: "photo.jpg", mimeType: "image/jpeg", buffer: await photo(2400, 1600) });
-  await expect(page.getByLabel("Article text")).toHaveValue(/!\[Printed flex banner with eyelets\]\(\/media\/blog\/.+\.webp =1600x1067\)/);
+  await expect(editor.getByRole("img", { name: "Printed flex banner with eyelets" })).toHaveAttribute("src", /\/media\/blog\/.+\.webp$/);
 
   await page.getByRole("tab", { name: "Preview" }).click();
   await expect(page.getByTestId("article-preview").getByRole("heading", { name: "Materials" })).toBeVisible();

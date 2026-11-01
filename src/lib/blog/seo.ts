@@ -37,9 +37,10 @@ function linksIn(nodes: Inline[]): string[] {
   return nodes.flatMap((n) => (n.type === "link" ? [n.href, ...linksIn(n.children)] : n.type === "strong" || n.type === "em" ? linksIn(n.children) : []));
 }
 
-/** Every link href in the article. */
+/** Every link href in the article, including links on images. */
 export function articleLinks(content: string): string[] {
   return parseBlocks(content).flatMap((b) => {
+    if (b.type === "image") return b.href ? [b.href] : [];
     const texts = b.type === "paragraph" || b.type === "quote" || b.type === "heading" ? [b.text] : b.type === "list" ? b.items : b.type === "table" ? [...b.header, ...b.rows.flat()] : [];
     return texts.flatMap((t) => linksIn(parseInline(t)));
   });
