@@ -26,6 +26,7 @@ import { ancestry, categoryUrl, defaultCategoryTitle, metaDescription, serviceUr
 import { formatPKR } from "@/lib/money";
 import { formatPercent } from "@/lib/pricing";
 import { absoluteUrl, SITE_NAME, seoMetadata } from "@/lib/seo";
+import { parseYouTubeUrl, youTubeThumbnail } from "@/lib/youtube";
 
 type Params = PageProps<"/products/[...path]">["params"];
 
@@ -192,16 +193,32 @@ function productJsonLd(product: ProductDetail, canonical: string, category: Cate
   };
 }
 
+/** VideoObject for a product's YouTube video (added next to the Product data, which stays as it is). */
+function videoJsonLd(product: ProductDetail, videoId: string) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    name: `${product.name} video`,
+    description: metaDescription(product.summary || product.description) || product.name,
+    thumbnailUrl: [youTubeThumbnail(videoId)],
+    embedUrl: `https://www.youtube.com/embed/${videoId}`,
+    contentUrl: product.youtubeUrl,
+    ...(product.youtubeAddedAt ? { uploadDate: product.youtubeAddedAt.toISOString() } : {}),
+  };
+}
+
 async function ProductView({ product, category, tree, canonical }: { product: ProductDetail; category: CategoryNode; tree: CategoryNode[]; canonical: string }) {
   const related = await getRelatedProducts(product.id, category.id);
+  const video = parseYouTubeUrl(product.youtubeUrl);
   const relatedCategories = [...category.children, ...siblings(tree, category)].slice(0, 6);
 
   return (
     <>
       <Breadcrumbs items={[...crumbsFor(tree, category), { name: product.name, href: canonical }]} className="mb-6" />
       <JsonLd data={productJsonLd(product, canonical, category)} />
+      {video && <JsonLd data={videoJsonLd(product, video.id)} />}
       <div className="grid gap-10 lg:grid-cols-2">
-        <ProductGallery images={product.images} />
+        <ProductGallery images={product.images} video={video && { ...video, first: product.youtubeVideoFirst, title: `${product.name} video` }} />
         <div>
           <h1 className="text-3xl font-bold">{product.name}</h1>
           {product.summary && <p className="mt-2 text-lg text-muted">{product.summary}</p>}

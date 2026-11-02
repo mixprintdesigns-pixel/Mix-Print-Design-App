@@ -44,7 +44,12 @@ export default async function EditProductPage({ params, searchParams }: PageProp
       )}
 
       <div className="mt-6 space-y-6">
-        <ImageManager productId={product.id} images={product.images} directUpload={directUploadAvailable()} />
+        <ImageManager
+          productId={product.id}
+          images={product.images}
+          directUpload={directUploadAvailable()}
+          video={{ url: product.youtubeUrl, first: product.youtubeVideoFirst }}
+        />
         {/* key: remount the editor with fresh ids after each save */}
         <ProductEditor
           key={product.updatedAt.toISOString()}

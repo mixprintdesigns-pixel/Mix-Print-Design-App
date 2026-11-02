@@ -127,6 +127,9 @@ model Product {
   minQuantity            Int              @default(1)
   quantityStep           Int              @default(1)
   turnaroundDays         Int              @default(3) // estimated production time, working days
+  youtubeUrl             String? // optional product video (normalised YouTube link), shown in the image gallery
+  youtubeVideoFirst      Boolean          @default(false) // true: the video is the main gallery item; false: after the first image
+  youtubeAddedAt         DateTime? // when the video link was set (used as the video's date for Google)
   status                 ProductStatus    @default(DRAFT)
   isAvailable            Boolean          @default(true) // can be ordered right now
   isFeatured             Boolean          @default(false)

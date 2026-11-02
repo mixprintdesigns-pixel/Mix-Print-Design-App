@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRef, useState, useTransition } from "react";
 import { upload as uploadToBlob } from "@vercel/blob/client";
+import { ProductVideoField } from "./product-video-field";
 import {
   attachProductImageAction,
   checkProductImageUploadAction,
@@ -71,7 +72,18 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
  * `directUpload`: the browser sends each file straight to Vercel Blob (no size limit from our server),
  * then the server records it. Without Blob storage (local development) files go through a server action.
  */
-export function ImageManager({ productId, images, directUpload = false }: { productId: string; images: ProductImage[]; directUpload?: boolean }) {
+export function ImageManager({
+  productId,
+  images,
+  directUpload = false,
+  video,
+}: {
+  productId: string;
+  images: ProductImage[];
+  directUpload?: boolean;
+  /** The product's optional YouTube video, edited next to the images. */
+  video?: { url: string | null; first: boolean };
+}) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: "error" | "ok"; text: string } | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
@@ -179,6 +191,8 @@ export function ImageManager({ productId, images, directUpload = false }: { prod
           />
         </label>
       </div>
+
+      {video && <ProductVideoField productId={productId} initialUrl={video.url} initialFirst={video.first} />}
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface p-3 text-sm" data-testid="ai-images">
         <span className="font-semibold">Create an original image with AI:</span>
