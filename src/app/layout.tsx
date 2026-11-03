@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import { WhatsAppFloat } from "@/components/whatsapp-float";
 import { WhatsAppReferral } from "@/components/whatsapp-referral";
 import { JsonLd } from "@/components/catalog/json-ld";
+import { PwaSetup } from "@/components/pwa/pwa-setup";
 import { localBusinessJsonLd, OPEN_GRAPH_DEFAULTS, SITE_URL } from "@/lib/seo";
 import "./globals.css";
 
@@ -17,10 +18,14 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image" },
 };
 
+/** Browser bar colour on phones and in the installed app: the logo blue. */
+export const viewport: Viewport = { themeColor: "#00AFEF" };
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
+        <PwaSetup />
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />

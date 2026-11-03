@@ -92,6 +92,14 @@ export async function SiteFooter() {
           </ul>
         </div>
       </div>
+      <p className="mx-auto mt-8 flex max-w-6xl flex-wrap gap-x-4 gap-y-1 px-4 text-xs text-muted">
+        <Link href="/privacy-policy" className="hover:text-foreground">
+          Privacy Policy
+        </Link>
+        <Link href="/terms" className="hover:text-foreground">
+          Terms &amp; Conditions
+        </Link>
+      </p>
     </footer>
   );
 }
