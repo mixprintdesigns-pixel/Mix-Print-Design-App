@@ -2,30 +2,37 @@
 
 import { useState, useTransition } from "react";
 import { saveProductVideoAction } from "@/app/admin/product-video-actions";
-import { parseYouTubeUrl, youTubeThumbnail } from "@/lib/youtube";
+import { parseYouTubeUrl, youTubeThumbnail, type VideoPosition } from "@/lib/youtube";
 
 /** "YouTube video link (optional)" in the product's Images area: paste, preview, choose the position, save or remove. */
-export function ProductVideoField({ productId, initialUrl, initialFirst }: { productId: string; initialUrl: string | null; initialFirst: boolean }) {
+const POSITIONS: { value: VideoPosition; label: string }[] = [
+  { value: "LAST", label: "After all images (last)" },
+  { value: "AFTER_FIRST", label: "After the first image" },
+  { value: "FIRST", label: "Show video first (main item)" },
+];
+
+export function ProductVideoField({ productId, initialUrl, initialPosition }: { productId: string; initialUrl: string | null; initialPosition: VideoPosition }) {
   const [link, setLink] = useState(initialUrl ?? "");
-  const [first, setFirst] = useState(initialFirst);
-  const [saved, setSaved] = useState({ url: initialUrl ?? "", first: initialFirst });
+  const [position, setPosition] = useState<VideoPosition>(initialPosition);
+  const [saved, setSaved] = useState({ url: initialUrl ?? "", position: initialPosition });
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const video = parseYouTubeUrl(link);
   const invalid = link.trim() !== "" && !video;
-  const changed = link.trim() !== saved.url || first !== saved.first;
+  const changed = link.trim() !== saved.url || position !== saved.position;
 
-  function save(nextLink: string, nextFirst: boolean) {
+  function save(nextLink: string, nextPosition: VideoPosition) {
     setMessage(null);
     startTransition(async () => {
       try {
-        const result = await saveProductVideoAction(productId, nextLink, nextFirst);
+        const result = await saveProductVideoAction(productId, nextLink, nextPosition);
         if (!result.ok) {
           setMessage({ kind: "error", text: result.error });
           return;
         }
         setLink(result.url ?? "");
-        setSaved({ url: result.url ?? "", first: nextFirst });
+        setPosition(nextPosition);
+        setSaved({ url: result.url ?? "", position: nextPosition });
         setMessage({ kind: "ok", text: result.url ? "Video saved. It now shows in the product's gallery." : "Video removed." });
       } catch (e) {
         setMessage({ kind: "error", text: `Could not save: ${e instanceof Error ? e.message : String(e)}` });
@@ -69,24 +76,22 @@ export function ProductVideoField({ productId, initialUrl, initialFirst }: { pro
             <p className="text-muted">{video.isShort ? "YouTube Short (upright video)" : "YouTube video"}</p>
             <fieldset className="space-y-1">
               <legend className="sr-only">Where the video shows</legend>
-              <label className="flex items-center gap-2">
-                <input type="radio" name={`video-position-${productId}`} checked={!first} onChange={() => setFirst(false)} />
-                After the first image
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" name={`video-position-${productId}`} checked={first} onChange={() => setFirst(true)} />
-                Show video first (main item)
-              </label>
+              {POSITIONS.map((p) => (
+                <label key={p.value} className="flex items-center gap-2">
+                  <input type="radio" name={`video-position-${productId}`} checked={position === p.value} onChange={() => setPosition(p.value)} />
+                  {p.label}
+                </label>
+              ))}
             </fieldset>
           </div>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className="btn-primary px-3 py-1.5 text-sm" disabled={pending || invalid || !changed || (!video && !saved.url)} onClick={() => save(link, first)}>
+        <button type="button" className="btn-primary px-3 py-1.5 text-sm" disabled={pending || invalid || !changed || (!video && !saved.url)} onClick={() => save(link, position)}>
           {pending ? "Saving…" : "Save video"}
         </button>
         {saved.url && (
-          <button type="button" className="btn-secondary px-3 py-1.5 text-sm text-red-700 dark:text-red-400" disabled={pending} onClick={() => save("", false)}>
+          <button type="button" className="btn-secondary px-3 py-1.5 text-sm text-red-700 dark:text-red-400" disabled={pending} onClick={() => save("", "LAST")}>
             Remove video
           </button>
         )}

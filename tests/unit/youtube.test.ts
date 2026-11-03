@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalisedYouTubeUrl, parseYouTubeUrl, youTubeEmbedUrl, youTubeThumbnail } from "@/lib/youtube";
+import { normalisedYouTubeUrl, parseYouTubeUrl, toVideoPosition, youTubeEmbedUrl, youTubeThumbnail } from "@/lib/youtube";
 
 const ID = "dQw4w9WgXcQ";
 
@@ -44,6 +44,18 @@ describe("YouTube links", () => {
     expect(youTubeThumbnail(ID)).toBe(`https://i.ytimg.com/vi/${ID}/hqdefault.jpg`);
     const embed = new URL(youTubeEmbedUrl(ID, "https://www.mixprintdesign.com"));
     expect(embed.hostname).toBe("www.youtube-nocookie.com");
-    expect(Object.fromEntries(embed.searchParams)).toMatchObject({ autoplay: "1", mute: "1", loop: "1", playlist: ID, playsinline: "1", enablejsapi: "1" });
+    expect(Object.fromEntries(embed.searchParams)).toMatchObject({ autoplay: "1", mute: "1", loop: "1", playlist: ID, controls: "1", playsinline: "1", enablejsapi: "1" });
+    // Started by the visitor's click: with sound and controls, not looping
+    const clicked = Object.fromEntries(new URL(youTubeEmbedUrl(ID, undefined, { muted: false })).searchParams);
+    expect(clicked).toMatchObject({ autoplay: "1", mute: "0", controls: "1", playsinline: "1" });
+    expect(clicked.loop).toBeUndefined();
+  });
+
+  it("reads the video position, defaulting to after all images", () => {
+    expect(toVideoPosition("FIRST")).toBe("FIRST");
+    expect(toVideoPosition("AFTER_FIRST")).toBe("AFTER_FIRST");
+    expect(toVideoPosition("LAST")).toBe("LAST");
+    expect(toVideoPosition(undefined)).toBe("LAST");
+    expect(toVideoPosition("nonsense")).toBe("LAST");
   });
 });

@@ -2,11 +2,11 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { youTubeEmbedUrl, youTubeThumbnail } from "@/lib/youtube";
+import { youTubeEmbedUrl, youTubeThumbnail, type VideoPosition } from "@/lib/youtube";
 
 type GalleryImage = { id: string; url: string; alt: string };
-/** The product's optional YouTube video. `first`: the main gallery item; otherwise it comes after the first image. */
-export type GalleryVideo = { id: string; isShort: boolean; first: boolean; title: string };
+/** The product's optional YouTube video and where it sits: first (main item), after the first image, or after all images. */
+export type GalleryVideo = { id: string; isShort: boolean; position: VideoPosition; title: string };
 
 export function ProductGallery({ images, video }: { images: GalleryImage[]; video?: GalleryVideo | null }) {
   // Products without a video keep exactly the gallery they had.
@@ -68,11 +68,18 @@ type Item = { kind: "image"; image: GalleryImage } | { kind: "video" };
 
 function GalleryWithVideo({ images, video }: { images: GalleryImage[]; video: GalleryVideo }) {
   const items: Item[] = images.map((image) => ({ kind: "image", image }));
-  items.splice(video.first ? 0 : Math.min(1, items.length), 0, { kind: "video" });
+  items.splice(video.position === "FIRST" ? 0 : video.position === "AFTER_FIRST" ? Math.min(1, items.length) : items.length, 0, { kind: "video" });
   const [active, setActive] = useState(0);
+  // Chosen by the visitor (click or swipe): the video plays with sound. Shown first on its own: muted autoplay.
+  const [chosen, setChosen] = useState(false);
   const touch = useRef<{ x: number; y: number } | null>(null);
   const current = items[active] ?? items[0];
-  const go = (i: number) => setActive((i + items.length) % items.length);
+  const show = (i: number) => {
+    const next = (i + items.length) % items.length;
+    setActive(next);
+    if (items[next]?.kind === "video") setChosen(true);
+  };
+  const go = show;
 
   return (
     <div>
@@ -91,7 +98,7 @@ function GalleryWithVideo({ images, video }: { images: GalleryImage[]; video: Ga
         }}
       >
         {current.kind === "video" ? (
-          <VideoPlayer key={video.id} video={video} isFirstItem={active === 0} />
+          <VideoPlayer key={`${video.id}:${chosen}`} video={video} isFirstItem={active === 0} withSound={chosen} />
         ) : (
           <Image
             src={current.image.url}
@@ -110,7 +117,7 @@ function GalleryWithVideo({ images, video }: { images: GalleryImage[]; video: Ga
             <li key={item.kind === "video" ? "video" : item.image.id}>
               <button
                 type="button"
-                onClick={() => setActive(i)}
+                onClick={() => show(i)}
                 aria-label={item.kind === "video" ? `Play video: ${video.title}` : `Show image ${i + 1}: ${item.image.alt}`}
                 aria-pressed={i === active}
                 className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 ${
@@ -149,19 +156,42 @@ function PlayIcon({ className }: { className: string }) {
 }
 
 /**
- * Shows only the video's thumbnail until the video is the selected item and on screen, then loads the
- * YouTube player (youtube-nocookie.com): muted, looping and playing inline. "Tap for sound" turns the sound on
- * without restarting. Browsers only allow autoplay without sound, so the sound needs the visitor's tap.
+ * The YouTube player (youtube-nocookie.com), loaded only when needed:
+ * - `withSound` (the visitor clicked or swiped to the video): loads at once and plays with sound and controls.
+ *   The click is the permission browsers need for sound.
+ * - otherwise (the video is shown first): only its thumbnail until it is on screen, then muted, looping
+ *   autoplay with "Tap for sound", which turns the sound on without restarting.
+ * After loading, the player is also told to play (and to mute or unmute), in case it ignored the autoplay setting.
  */
-function VideoPlayer({ video, isFirstItem }: { video: GalleryVideo; isFirstItem: boolean }) {
+function VideoPlayer({ video, isFirstItem, withSound }: { video: GalleryVideo; isFirstItem: boolean; withSound: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
-  const [load, setLoad] = useState(false);
-  const [sound, setSound] = useState(false);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [load, setLoad] = useState(withSound);
+  const [sound, setSound] = useState(withSound);
+
+  const send = (func: string, args: unknown[] = []) => frame.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+
+  /** Once the player page has loaded: make sure it plays, muted or with sound as intended. */
+  function startPlaying() {
+    timers.current.forEach(clearTimeout);
+    timers.current = [400, 1200, 2500].map((ms) =>
+      setTimeout(() => {
+        if (withSound) {
+          send("unMute");
+          send("setVolume", [100]);
+        } else {
+          send("mute");
+        }
+        send("playVideo");
+      }, ms),
+    );
+  }
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   useEffect(() => {
     const el = box.current;
-    if (!el) return;
+    if (!el || withSound) return;
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting)) {
         setLoad(true);
@@ -170,10 +200,10 @@ function VideoPlayer({ video, isFirstItem }: { video: GalleryVideo; isFirstItem:
     }, { rootMargin: "100px" });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [withSound]);
 
   function turnSoundOn() {
-    const send = (func: string, args: unknown[] = []) => frame.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+    timers.current.forEach(clearTimeout); // stop the "keep muted" reminders
     send("unMute");
     send("setVolume", [100]);
     send("playVideo"); // keeps playing from where it is
@@ -201,7 +231,8 @@ function VideoPlayer({ video, isFirstItem }: { video: GalleryVideo; isFirstItem:
         <div className={`relative ${frameBox} max-h-full max-w-full`}>
           <iframe
             ref={frame}
-            src={youTubeEmbedUrl(video.id, typeof window !== "undefined" ? window.location.origin : undefined)}
+            src={youTubeEmbedUrl(video.id, typeof window !== "undefined" ? window.location.origin : undefined, { muted: !withSound })}
+            onLoad={startPlaying}
             title={video.title}
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
             allowFullScreen

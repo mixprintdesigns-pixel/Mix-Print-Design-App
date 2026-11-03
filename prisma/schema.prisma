@@ -130,6 +130,7 @@ model Product {
   youtubeUrl             String? // optional product video (normalised YouTube link), shown in the image gallery
   youtubeVideoFirst      Boolean          @default(false) // true: the video is the main gallery item; false: after the first image
   youtubeAddedAt         DateTime? // when the video link was set (used as the video's date for Google)
+  youtubeVideoPosition   String           @default("LAST") // FIRST (main item), AFTER_FIRST (after the first image) or LAST (after all images)
   status                 ProductStatus    @default(DRAFT)
   isAvailable            Boolean          @default(true) // can be ordered right now
   isFeatured             Boolean          @default(false)

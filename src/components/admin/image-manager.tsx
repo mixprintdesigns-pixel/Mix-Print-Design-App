@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRef, useState, useTransition } from "react";
 import { upload as uploadToBlob } from "@vercel/blob/client";
 import { ProductVideoField } from "./product-video-field";
+import type { VideoPosition } from "@/lib/youtube";
 import {
   attachProductImageAction,
   checkProductImageUploadAction,
@@ -82,7 +83,7 @@ export function ImageManager({
   images: ProductImage[];
   directUpload?: boolean;
   /** The product's optional YouTube video, edited next to the images. */
-  video?: { url: string | null; first: boolean };
+  video?: { url: string | null; position: VideoPosition };
 }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: "error" | "ok"; text: string } | null>(null);
@@ -192,7 +193,7 @@ export function ImageManager({
         </label>
       </div>
 
-      {video && <ProductVideoField productId={productId} initialUrl={video.url} initialFirst={video.first} />}
+      {video && <ProductVideoField productId={productId} initialUrl={video.url} initialPosition={video.position} />}
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface p-3 text-sm" data-testid="ai-images">
         <span className="font-semibold">Create an original image with AI:</span>

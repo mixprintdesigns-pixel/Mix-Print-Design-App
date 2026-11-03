@@ -46,13 +46,22 @@ export function normalisedYouTubeUrl(video: YouTubeVideo): string {
 /** The video's thumbnail (480 × 360, always available). */
 export const youTubeThumbnail = (id: string) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 
-/** Player address: muted, looping autoplay that also works inline on phones; the JS API is used to turn the sound on. */
-export function youTubeEmbedUrl(id: string, origin?: string): string {
+/** Where the video sits in a product's gallery. */
+export const VIDEO_POSITIONS = ["LAST", "AFTER_FIRST", "FIRST"] as const;
+export type VideoPosition = (typeof VIDEO_POSITIONS)[number];
+export const toVideoPosition = (value: unknown): VideoPosition => (VIDEO_POSITIONS.includes(value as VideoPosition) ? (value as VideoPosition) : "LAST");
+
+/**
+ * Player address, always with controls and playing inline on phones; the JS API is used to control the sound.
+ * `muted`: muted, looping autoplay (the video shown first). Otherwise it starts with sound: the visitor's click
+ * on the video is the permission browsers need for that.
+ */
+export function youTubeEmbedUrl(id: string, origin?: string, { muted = true }: { muted?: boolean } = {}): string {
   const params = new URLSearchParams({
     autoplay: "1",
-    mute: "1",
-    loop: "1",
-    playlist: id, // needed for loop
+    mute: muted ? "1" : "0",
+    ...(muted ? { loop: "1", playlist: id } : {}), // playlist is needed for loop
+    controls: "1",
     playsinline: "1",
     rel: "0",
     modestbranding: "1",

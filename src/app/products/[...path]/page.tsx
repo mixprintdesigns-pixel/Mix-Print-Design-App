@@ -26,7 +26,7 @@ import { ancestry, categoryUrl, defaultCategoryTitle, metaDescription, serviceUr
 import { formatPKR } from "@/lib/money";
 import { formatPercent } from "@/lib/pricing";
 import { absoluteUrl, SITE_NAME, seoMetadata } from "@/lib/seo";
-import { parseYouTubeUrl, youTubeThumbnail } from "@/lib/youtube";
+import { parseYouTubeUrl, toVideoPosition, youTubeThumbnail } from "@/lib/youtube";
 
 type Params = PageProps<"/products/[...path]">["params"];
 
@@ -218,7 +218,7 @@ async function ProductView({ product, category, tree, canonical }: { product: Pr
       <JsonLd data={productJsonLd(product, canonical, category)} />
       {video && <JsonLd data={videoJsonLd(product, video.id)} />}
       <div className="grid gap-10 lg:grid-cols-2">
-        <ProductGallery images={product.images} video={video && { ...video, first: product.youtubeVideoFirst, title: `${product.name} video` }} />
+        <ProductGallery images={product.images} video={video && { ...video, position: toVideoPosition(product.youtubeVideoPosition), title: `${product.name} video` }} />
         <div>
           <h1 className="text-3xl font-bold">{product.name}</h1>
           {product.summary && <p className="mt-2 text-lg text-muted">{product.summary}</p>}

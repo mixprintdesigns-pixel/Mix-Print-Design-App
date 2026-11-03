@@ -1,10 +1,10 @@
 // Creates a published test product with two images (copied from a seeded product), for the product video tests.
 // Optionally sets a YouTube video directly. Prints { id, path } as JSON.
-// Run with: tsx --conditions=react-server tests/e2e/support/create-video-test-product.ts <name> [youtubeUrl] [first]
+// Run with: tsx --conditions=react-server tests/e2e/support/create-video-test-product.ts <name> [youtubeUrl] [FIRST|AFTER_FIRST|LAST]
 import { prisma } from "@/lib/db";
 
 async function main() {
-  const [name, youtubeUrl, first] = process.argv.slice(2);
+  const [name, youtubeUrl, position = "LAST"] = process.argv.slice(2);
   const source = await prisma.product.findFirstOrThrow({
     where: { status: "PUBLISHED", images: { some: {} } },
     include: { images: { orderBy: { sortOrder: "asc" }, take: 2 }, category: { select: { id: true, slug: true, parentId: true } } },
@@ -21,7 +21,8 @@ async function main() {
       basePriceMinor: 1000,
       status: "PUBLISHED",
       youtubeUrl: youtubeUrl || null,
-      youtubeVideoFirst: first === "first",
+      youtubeVideoFirst: position === "FIRST",
+      youtubeVideoPosition: position,
       youtubeAddedAt: youtubeUrl ? new Date("2026-11-01T10:00:00Z") : null,
       images: { create: [0, 1].map((i) => ({ url: source.images[i % source.images.length].url, alt: `${name} photo ${i + 1}`, sortOrder: i })) },
     },

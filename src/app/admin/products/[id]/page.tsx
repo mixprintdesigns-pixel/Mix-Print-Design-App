@@ -7,6 +7,7 @@ import { getAdminProduct } from "@/lib/admin/catalog-service";
 import { categoryChoices, toProductInput } from "@/lib/admin/editor-data";
 import { requireStaff } from "@/lib/auth/session";
 import { directUploadAvailable } from "@/lib/storage/blob-direct";
+import { toVideoPosition } from "@/lib/youtube";
 
 // AI image generation can take up to a minute.
 export const maxDuration = 120;
@@ -48,7 +49,7 @@ export default async function EditProductPage({ params, searchParams }: PageProp
           productId={product.id}
           images={product.images}
           directUpload={directUploadAvailable()}
-          video={{ url: product.youtubeUrl, first: product.youtubeVideoFirst }}
+          video={{ url: product.youtubeUrl, position: toVideoPosition(product.youtubeVideoPosition) }}
         />
         {/* key: remount the editor with fresh ids after each save */}
         <ProductEditor
