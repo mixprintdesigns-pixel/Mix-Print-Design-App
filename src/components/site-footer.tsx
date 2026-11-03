@@ -16,7 +16,7 @@ export async function SiteFooter() {
     <footer className="mt-16 border-t border-border bg-surface">
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 text-sm text-muted sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <BrandLogo className="h-12 w-auto" />
+          <BrandLogo className="h-12 w-auto app:hidden!" />
           <p className="mt-2">Quality printing, delivered across Pakistan.</p>
           <ul className="mt-4 flex gap-2" aria-label="Social media">
             {socials.map(({ href, label, Icon }) => (

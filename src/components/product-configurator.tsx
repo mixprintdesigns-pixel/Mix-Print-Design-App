@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useAppMode } from "@/components/app/app-mode";
 import { useRouter } from "next/navigation";
 import { placeWebsiteOrderAction } from "@/app/order/actions";
 import { formatPKR } from "@/lib/money";
@@ -30,6 +31,12 @@ export function ProductConfigurator({ product }: Props) {
   const [orderError, setOrderError] = useState<string | null>(null);
   const [placing, startPlacing] = useTransition();
   const router = useRouter();
+  const appMode = useAppMode();
+  const detailsForm = useRef<HTMLFormElement>(null);
+  // In the app the Order now button is in the bottom bar: bring the details form into view when it opens.
+  useEffect(() => {
+    if (checkout && appMode) detailsForm.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [checkout, appMode]);
 
   // Same pricing code as the server; the server recalculates and is the source of truth.
   const quote = useMemo((): { error: string } | (LinePrice & { error: null }) => {
@@ -82,7 +89,7 @@ export function ProductConfigurator({ product }: Props) {
               return (
                 <label
                   key={value.id}
-                  className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition ${
+                  className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition app:min-h-12 app:px-4 app:py-3 app:text-base ${
                     checked ? "border-brand bg-brand/10 font-semibold" : "border-border hover:border-foreground/40"
                   }`}
                 >
@@ -136,7 +143,11 @@ export function ProductConfigurator({ product }: Props) {
         <textarea id="notes" name="notes" rows={2} maxLength={500} className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
 
-      <div className="flex items-end justify-between border-t border-border pt-4">
+      {/* In the installed app this row is a sticky bar above the tab bar: total price and Order now. */}
+      <div
+        className="flex items-end justify-between border-t border-border pt-4 app:fixed app:inset-x-0 app:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] app:z-40 app:items-center app:gap-3 app:bg-surface app:px-4 app:py-3 app:shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
+        data-app-buy-bar
+      >
         {quote.error !== null ? (
           <p className="field-error" role="alert">
             {quote.error}
@@ -171,7 +182,7 @@ export function ProductConfigurator({ product }: Props) {
       </div>
 
       {checkout && (
-        <form onSubmit={placeOrder} className="space-y-3 rounded-lg border border-border bg-surface p-4" aria-label="Your details" noValidate>
+        <form ref={detailsForm} onSubmit={placeOrder} className="space-y-3 rounded-lg border border-border bg-surface p-4" aria-label="Your details" noValidate>
           <p className="text-sm font-semibold">Your details</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">

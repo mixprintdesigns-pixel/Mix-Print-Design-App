@@ -109,7 +109,7 @@ export function ChatWidget() {
         <section
           role="dialog"
           aria-label="Mix Print Design assistant"
-          className="fixed inset-x-2 bottom-20 z-50 flex max-h-[min(36rem,calc(100dvh-6rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl sm:inset-x-auto sm:right-5 sm:w-96"
+          className="app-float-panel fixed inset-x-2 bottom-20 z-50 flex max-h-[min(36rem,calc(100dvh-6rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl sm:inset-x-auto sm:right-5 sm:w-96"
         >
           <header className="flex items-center justify-between bg-gradient-to-r from-brand to-accent px-4 py-3 text-white">
             <div className="flex items-center gap-2">
@@ -213,7 +213,7 @@ export function ChatWidget() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-4 right-4 z-50 grid h-14 w-14 place-items-center rounded-full bg-brand text-white shadow-xl transition hover:scale-105 hover:bg-brand-strong sm:right-5"
+        className="app-float fixed bottom-4 right-4 z-50 grid h-14 w-14 place-items-center rounded-full bg-brand text-white shadow-xl transition hover:scale-105 hover:bg-brand-strong sm:right-5"
         aria-label={open ? "Close chat assistant" : "Open chat assistant"}
         aria-expanded={open}
       >

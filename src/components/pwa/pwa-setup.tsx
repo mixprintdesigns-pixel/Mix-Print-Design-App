@@ -49,7 +49,7 @@ export function PwaSetup() {
 
   if (!installEvent) return null;
   return (
-    <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-2 text-sm" role="region" aria-label="Install app" data-testid="install-app-banner">
+    <div className="app-hide flex items-center gap-3 border-b border-border bg-surface px-4 py-2 text-sm" role="region" aria-label="Install app" data-testid="install-app-banner">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/icon-192.png" alt="" width={28} height={28} className="h-7 w-7 shrink-0" />
       <p className="min-w-0 flex-1 leading-tight">

@@ -39,6 +39,8 @@ export function ProductCard({ product }: { product: ProductCardData }) {
             / unit · min {product.minQuantity} · {product.turnaroundDays}-day production
           </span>
         </p>
+        {/* In the installed app: a clear button on each full-width card. */}
+        <span className="btn-primary mt-4 hidden w-full app:inline-flex">View / Order</span>
       </div>
     </Link>
   );

@@ -82,7 +82,7 @@ export async function ProductListing({
           {filtered ? "No products match your filters." : "Products for this category are coming soon. Ask us for a quote in the meantime."}
         </div>
       ) : (
-        <div className="mt-4 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="app-list mt-4 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
@@ -94,7 +94,7 @@ export async function ProductListing({
 
 export function ProductGridSkeleton() {
   return (
-    <div className="mt-4 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="app-list mt-4 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="card h-72 animate-pulse" />
       ))}

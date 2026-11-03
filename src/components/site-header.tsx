@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { logoutAction } from "@/app/actions/auth";
 import { BrandLogo } from "@/components/brand-logo";
 import { MobileMenu, type NavLink } from "@/components/mobile-menu";
+import { AppTopBarWhatsApp } from "@/components/app/app-nav";
 
 // Site pages, shown in the header on large screens and in the menu on phones/tablets.
 const PAGES: NavLink[] = [
@@ -18,23 +19,29 @@ const PAGES: NavLink[] = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
+    // In the installed app: a slim top bar with the logo and WhatsApp; pages are in the bottom tab bar instead.
+    <header className="site-header sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 app:h-14">
         <Link href="/" className="shrink-0" aria-label="Mix Print Design home">
-          <BrandLogo className="h-10 w-auto" priority />
+          <BrandLogo className="h-10 w-auto app:h-8" priority />
         </Link>
-        <nav className="hidden gap-5 text-sm font-medium text-muted lg:flex" aria-label="Main">
+        <nav className="hidden gap-5 text-sm font-medium text-muted lg:flex app:hidden!" aria-label="Main">
           {PAGES.map((l) => (
             <Link key={l.href} href={l.href} className="hover:text-foreground">
               {l.label}
             </Link>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-3 text-sm">
+        <div className="ml-auto flex items-center gap-3 text-sm app:hidden!">
           <MobileMenu links={PAGES} />
           {/* Reads cookies, so it streams in after the static shell. */}
           <Suspense fallback={<span className="h-9 w-32" aria-hidden />}>
             <HeaderSession />
+          </Suspense>
+        </div>
+        <div className="ml-auto hidden app:block">
+          <Suspense fallback={null}>
+            <AppTopBarWhatsApp />
           </Suspense>
         </div>
       </div>

@@ -59,7 +59,8 @@ export default async function HomePage() {
         <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-24 h-80 w-80 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-[1.15fr_1fr] md:items-center md:py-20">
           <div>
-            <BrandLogo className="h-14 w-auto sm:h-16" priority />
+            {/* The app shows the logo once, in its top bar. */}
+            <BrandLogo className="h-14 w-auto sm:h-16 app:hidden!" priority />
             <h1 className="mt-6 text-4xl font-extrabold tracking-tight sm:text-5xl">
               {taglineWords.join(" ")} <span className="text-brand">{taglineEnd}</span>
             </h1>
@@ -112,7 +113,7 @@ export default async function HomePage() {
               All services →
             </Link>
           </div>
-          <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="app-list mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {services.map((s, i) => (
               <div key={s.id} className="flex flex-col gap-2">
                 <CategoryCard category={s} href={serviceUrl(s.path)} index={i} />
@@ -135,7 +136,7 @@ export default async function HomePage() {
             </Link>
           </div>
           {/* Swipeable row on phones, grid on larger screens */}
-          <div className="-mx-4 mt-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
+          <div className="app-list -mx-4 mt-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
             {featured.map((p) => (
               <div key={p.id} className="w-72 shrink-0 snap-start sm:w-auto">
                 <ProductCard product={p} />

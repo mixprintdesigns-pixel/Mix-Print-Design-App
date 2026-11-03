@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/*
+ * App mode: the installed app (home-screen app and the Play Store app). The <html> element gets the
+ * "app-mode" class from a tiny script in the root layout when the display mode is standalone or fullscreen
+ * (or, to preview in a browser, after opening any page with ?app=1). The app: variant and the rules at the
+ * end of this file apply only then; the normal website is unchanged.
+ */
+@custom-variant app (&:where(.app-mode, .app-mode *));
+
 :root {
   --background: #fafaf9;
   --surface: #ffffff;
@@ -61,4 +69,58 @@ body {
 }
 @utility card {
   @apply rounded-xl border border-border bg-surface;
+}
+
+/* ─── App mode only (see the note at the top) ─────────────────────────────── */
+html.app-mode {
+  font-size: 106.25%; /* 17px text, everything scaled to match */
+  -webkit-tap-highlight-color: transparent;
+}
+html.app-mode body {
+  line-height: 1.6;
+  overflow-x: hidden;
+  /* room for the bottom tab bar */
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}
+/* Product pages: also room for the sticky price / Order now bar */
+html.app-mode body:has([data-app-buy-bar]) {
+  padding-bottom: calc(9.5rem + env(safe-area-inset-bottom));
+}
+html.app-mode .site-header {
+  padding-top: env(safe-area-inset-top);
+}
+/* Tap targets at least 48px; inputs at 16px or more so phones do not zoom in */
+html.app-mode :is(.btn, .btn-primary, .btn-secondary) {
+  min-height: 48px;
+}
+html.app-mode :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
+  font-size: max(16px, 1em) !important;
+}
+html.app-mode :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select) {
+  min-height: 48px;
+}
+/* Product, service and blog lists: one full-width card per row */
+html.app-mode .app-list {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  overflow: visible !important;
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+}
+html.app-mode .app-list > * {
+  width: auto !important;
+}
+/* Floating chat button and panel sit above the tab bar; WhatsApp is in the top bar instead */
+html.app-mode .app-float {
+  bottom: calc(5.5rem + env(safe-area-inset-bottom)) !important;
+}
+html.app-mode body:has([data-app-buy-bar]) .app-float {
+  bottom: calc(10.5rem + env(safe-area-inset-bottom)) !important;
+}
+html.app-mode .app-float-panel {
+  bottom: calc(9.5rem + env(safe-area-inset-bottom)) !important;
+  max-height: calc(100dvh - 12rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+}
+html.app-mode .app-hide {
+  display: none !important;
 }

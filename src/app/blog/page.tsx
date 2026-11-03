@@ -34,7 +34,7 @@ export default function BlogPage({ searchParams }: PageProps<"/blog">) {
 
 function BlogSkeleton() {
   return (
-    <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="app-list mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="card h-80 animate-pulse" />
       ))}
@@ -102,7 +102,7 @@ async function BlogListing({ searchParams }: { searchParams: PageProps<"/blog">[
       {result.posts.length === 0 ? (
         <p className="card mt-8 p-10 text-center text-muted">{q || current ? "No articles found. Try another search or category." : "Articles are coming soon."}</p>
       ) : (
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="app-list mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {result.posts.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}

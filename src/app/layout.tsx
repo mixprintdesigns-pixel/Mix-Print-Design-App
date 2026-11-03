@@ -6,6 +6,8 @@ import { WhatsAppFloat } from "@/components/whatsapp-float";
 import { WhatsAppReferral } from "@/components/whatsapp-referral";
 import { JsonLd } from "@/components/catalog/json-ld";
 import { PwaSetup } from "@/components/pwa/pwa-setup";
+import { AppNav } from "@/components/app/app-nav";
+import { APP_MODE_SCRIPT } from "@/components/app/app-mode";
 import { localBusinessJsonLd, OPEN_GRAPH_DEFAULTS, SITE_URL } from "@/lib/seo";
 import "./globals.css";
 
@@ -23,7 +25,12 @@ export const viewport: Viewport = { themeColor: "#00AFEF" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full antialiased">
+    // suppressHydrationWarning: the app-mode script may add a class to <html> before React loads.
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        {/* Marks the page as the installed app before it paints (see components/app/app-mode.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: APP_MODE_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col">
         <PwaSetup />
         <SiteHeader />
@@ -32,6 +39,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <WhatsAppFloat />
         <WhatsAppReferral />
         <ChatWidget />
+        <AppNav />
         <JsonLd data={localBusinessJsonLd()} />
       </body>
     </html>

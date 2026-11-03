@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { useAppMode } from "@/components/app/app-mode";
 import { youTubeEmbedUrl, youTubeThumbnail, type VideoPosition } from "@/lib/youtube";
 
 type GalleryImage = { id: string; url: string; alt: string };
@@ -16,12 +17,14 @@ export function ProductGallery({ images, video }: { images: GalleryImage[]; vide
 function ImageGallery({ images }: { images: GalleryImage[] }) {
   const [active, setActive] = useState(0);
   const current = images[active];
+  // In the installed app the images can also be swiped; the website gallery stays as it was.
+  const swipe = useSwipe((step) => setActive((i) => (i + step + images.length) % images.length), useAppMode() && images.length > 1);
 
   if (!current) return <div className="card aspect-[4/3]" />;
 
   return (
     <div>
-      <div className="card relative aspect-[4/3] overflow-hidden">
+      <div className={APP_FULL_WIDTH} {...swipe}>
         <Image
           src={current.url}
           alt={current.alt}
@@ -62,6 +65,26 @@ function ImageGallery({ images }: { images: GalleryImage[] }) {
   );
 }
 
+/** The main image box; in the installed app it runs edge to edge across the screen. */
+const APP_FULL_WIDTH = "card relative aspect-[4/3] overflow-hidden app:-mx-4 app:rounded-none app:border-x-0";
+
+/** Touch handlers for a left / right swipe (step +1 / −1), or none when not enabled. */
+function useSwipe(onStep: (step: 1 | -1) => void, enabled: boolean) {
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  if (!enabled) return {};
+  return {
+    onTouchStart: (e: React.TouchEvent) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }),
+    onTouchEnd: (e: React.TouchEvent) => {
+      const start = touch.current;
+      touch.current = null;
+      if (!start) return;
+      const dx = e.changedTouches[0].clientX - start.x;
+      const dy = e.changedTouches[0].clientY - start.y;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) onStep(dx < 0 ? 1 : -1);
+    },
+  };
+}
+
 // ─── With a video ────────────────────────────────────────────────────────────
 
 type Item = { kind: "image"; image: GalleryImage } | { kind: "video" };
@@ -72,30 +95,21 @@ function GalleryWithVideo({ images, video }: { images: GalleryImage[]; video: Ga
   const [active, setActive] = useState(0);
   // Chosen by the visitor (click or swipe): the video plays with sound. Shown first on its own: muted autoplay.
   const [chosen, setChosen] = useState(false);
-  const touch = useRef<{ x: number; y: number } | null>(null);
   const current = items[active] ?? items[0];
   const show = (i: number) => {
     const next = (i + items.length) % items.length;
     setActive(next);
     if (items[next]?.kind === "video") setChosen(true);
   };
-  const go = show;
+  const swipeAll = useSwipe((step) => show(active + step), true);
 
   return (
     <div>
       <div
-        className="card relative aspect-[4/3] touch-pan-y overflow-hidden"
+        className={`${APP_FULL_WIDTH} touch-pan-y`}
         data-testid="gallery-main"
         // Swipe left / right between the images and the video.
-        onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
-        onTouchEnd={(e) => {
-          const start = touch.current;
-          touch.current = null;
-          if (!start) return;
-          const dx = e.changedTouches[0].clientX - start.x;
-          const dy = e.changedTouches[0].clientY - start.y;
-          if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(active + (dx < 0 ? 1 : -1));
-        }}
+        {...swipeAll}
       >
         {current.kind === "video" ? (
           <VideoPlayer key={`${video.id}:${chosen}`} video={video} isFirstItem={active === 0} withSound={chosen} />
