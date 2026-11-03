@@ -27,7 +27,7 @@ const sections: { href: string; label: string; ready: boolean }[] = [
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[13rem_1fr]">
-      <nav aria-label="Admin" className="lg:sticky lg:top-24 lg:self-start">
+      <nav aria-label="Admin" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
         <BrandBadge className="mb-3 h-12 w-12" />
         <p className="mb-3 text-xs font-bold uppercase tracking-widest text-accent">Admin</p>
         <ul className="flex gap-1 overflow-x-auto text-sm lg:flex-col">

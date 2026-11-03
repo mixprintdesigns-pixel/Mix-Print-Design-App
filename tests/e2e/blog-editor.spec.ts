@@ -3,10 +3,7 @@ import sharp from "sharp";
 
 // The visual article editor: existing articles open intact, formatting shows while typing, applying a format
 // never moves the page, images can be inserted mid-article, linked and captioned, and everything saves.
-//
-// Desktop only for now: on phone-sized screens every Admin page is wider than the screen (the existing Admin
-// side menu does not shrink), which blocks taps on all Admin pages, not just this one.
-test.skip(({ isMobile }) => isMobile, "Admin pages overflow on phones (existing Admin layout); covered on desktop");
+// Runs on desktop and on a phone-sized screen.
 
 async function signInAsAdmin(page: Page) {
   await page.goto("/login");
