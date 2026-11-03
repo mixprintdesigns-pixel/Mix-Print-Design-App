@@ -4,7 +4,7 @@ import { logoutAction } from "@/app/actions/auth";
 import { FacebookIcon, InstagramIcon, TikTokIcon, WhatsAppIcon, YouTubeIcon } from "@/components/icons/social-icons";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getSiteSettings, whatsappUrl } from "@/lib/content/site-settings";
-import { AppTabBar, MoreRow } from "./app-tab-bar";
+import { AppTabBar, AppTabBarFallback, MoreRow } from "./app-tab-bar";
 
 // App mode only: the bottom tab bar, with the account and social rows of its More sheet filled in on the server.
 
@@ -111,9 +111,10 @@ export async function AppTopBarWhatsApp() {
 }
 
 export function AppNav() {
-  // The tab bar reads the current address, so it streams in after the static page shell.
+  // The tab bar reads the current address, so it streams in after the static page shell; until then the same
+  // bar is shown without a highlighted tab, so it is never missing.
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<AppTabBarFallback />}>
       <AppTabBar
         account={
           <Suspense fallback={<li className="h-14 animate-pulse" />}>

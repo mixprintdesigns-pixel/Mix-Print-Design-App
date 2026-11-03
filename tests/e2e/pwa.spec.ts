@@ -9,7 +9,7 @@ test("manifest and icons", async ({ request }) => {
     id: "/",
     name: "Mix Print Design",
     short_name: "Mix Print",
-    start_url: "/",
+    start_url: "/?app=1",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
 import { CategoryPrice } from "@/components/catalog/category-price";
+import { AppCardActions } from "@/components/app/app-card-actions";
+import { APP_ROW_CARD, APP_ROW_VISUAL } from "@/components/catalog/category-card";
 import { QuoteButtons } from "@/components/services/quote-buttons";
 import { ServiceVisual } from "@/components/services/service-visual";
 import { getCategoryTree } from "@/lib/catalog/queries";
@@ -26,42 +28,46 @@ export default async function ServicesPage() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl space-y-10 px-4 py-12" data-testid="main-services">
+      <div className="mx-auto max-w-6xl space-y-10 px-4 py-12 app:space-y-3.5 app:py-6" data-testid="main-services">
         {services.length === 0 && <p className="text-muted">Services will appear here soon.</p>}
         {services.map((service, i) => (
           <section
             key={service.id}
-            className="card grid overflow-hidden md:grid-cols-[2fr_3fr]"
+            className={`card grid overflow-hidden md:grid-cols-[2fr_3fr] ${APP_ROW_CARD}`}
             aria-labelledby={`svc-${service.slug}`}
             data-testid="category-card"
           >
-            <Link href={serviceUrl(service.path)} className="block" tabIndex={-1} aria-hidden>
+            <Link href={serviceUrl(service.path)} className="block app:p-3 app:pr-0" tabIndex={-1} aria-hidden>
               <ServiceVisual
                 title={service.name}
                 imageUrl={service.imageUrl}
                 alt={service.imageAlt}
                 index={i}
                 priority={i === 0}
-                sizes="(min-width: 768px) 40vw, 100vw"
+                sizes="(min-width: 768px) 40vw, (display-mode: standalone) 120px, 100vw"
+                className={APP_ROW_VISUAL}
+                initialsClassName="app:text-2xl"
               />
             </Link>
-            <div className="flex flex-col p-6">
-              <h2 id={`svc-${service.slug}`} className="text-2xl font-bold">
+            <div className="flex flex-col p-6 app:p-3 app:pl-4">
+              <h2 id={`svc-${service.slug}`} className="app-card-title text-2xl font-bold">
                 <Link href={serviceUrl(service.path)} className="hover:text-brand">
                   {service.name}
                 </Link>
               </h2>
-              {service.description && <p className="mt-2 text-muted">{service.description}</p>}
-              <p className="mt-3 text-sm">
+              {service.description && <p className="app-card-text mt-2 text-muted app:mt-1 app:line-clamp-2">{service.description}</p>}
+              <p className="mt-3 text-sm app:mt-2">
                 <CategoryPrice category={service} />
               </p>
-              <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
+              {/* The installed app shows one action row instead (below) */}
+              <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5 app:hidden!">
                 <Link href={serviceUrl(service.path)} className="font-semibold text-brand">
                   View {service.name} →
                 </Link>
                 <QuoteButtons subject={service.name} />
               </div>
             </div>
+            <AppCardActions href={serviceUrl(service.path)} subject={service.name} className="app:col-span-2 app:px-3 app:pb-3" />
           </section>
         ))}
       </div>

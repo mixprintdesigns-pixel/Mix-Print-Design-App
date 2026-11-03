@@ -8,7 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
     name: BUSINESS.name,
     short_name: "Mix Print",
     description: "Printing, sign boards and design in Lahore, delivered across Pakistan.",
-    start_url: "/",
+    // ?app=1 tells the page it was opened from the app icon (see components/app/app-mode.ts). The id stays "/".
+    start_url: "/?app=1",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

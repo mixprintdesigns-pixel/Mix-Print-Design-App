@@ -131,3 +131,78 @@ test("normal phone browser: the product page and lists are unchanged", async ({ 
   await page.goto("/products");
   await expect(page.getByTestId("product-card").first().getByText("View / Order")).toBeHidden();
 });
+
+test("installed app (display-mode standalone, no ?app=1): app mode and the tab bar are on", async ({ page }) => {
+  // As in the real installed app: matchMedia("(display-mode: standalone)") matches, and the address has no ?app=1.
+  await page.addInitScript(() => {
+    const real = window.matchMedia.bind(window);
+    window.matchMedia = (q: string) =>
+      /display-mode:\s*standalone/.test(q) ? ({ ...real(q), matches: true, media: q, addEventListener() {}, removeEventListener() {} } as MediaQueryList) : real(q);
+  });
+  await page.goto("/services");
+  expect(await page.evaluate(() => matchMedia("(display-mode: standalone)").matches)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.classList.contains("app-mode"))).toBe(true);
+  const tabs = page.getByRole("navigation", { name: "App" });
+  await expect(tabs).toBeVisible();
+  await expect(tabs.getByRole("link", { name: "Services" })).toHaveAttribute("aria-current", "page");
+  // Remembered for the visit, also after moving on
+  await tabs.getByRole("link", { name: "Home" }).click();
+  await expect(page.getByTestId("app-home-header")).toBeVisible();
+});
+
+test("the app starts at /?app=1 (manifest), keeping the same app id", async ({ request }) => {
+  const manifest = await (await request.get("/manifest.webmanifest")).json();
+  expect(manifest.start_url).toBe("/?app=1");
+  expect(manifest.id).toBe("/");
+  expect(manifest.display).toBe("standalone");
+});
+
+test("app home: compact header with search and chips, one action row per service card, readable text", async ({ page }) => {
+  await page.goto("/?app=1");
+  const header = page.getByTestId("app-home-header");
+  await expect(header).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 }).filter({ visible: true })).toHaveCount(0); // the website hero is hidden
+  await expect(header.getByRole("navigation", { name: "Services" }).getByRole("link").first()).toBeVisible();
+  await expect(page.getByTestId("app-steps")).toBeVisible();
+
+  const cards = page.getByTestId("category-card").filter({ visible: true });
+  expect(await cards.count()).toBeGreaterThan(0);
+  for (const card of await cards.all()) {
+    expect((await card.boundingBox())!.height).toBeLessThan(320); // compact, not a screen-high placeholder
+    await expect(card.getByRole("link", { name: /^View/ })).toBeVisible();
+    await expect(card.getByRole("link", { name: /on WhatsApp$/ })).toBeVisible();
+    expect((await card.getByRole("link", { name: /^View/ }).boundingBox())!.height).toBeGreaterThanOrEqual(47.5);
+  }
+  // No second "Get Quote" / "Order on WhatsApp" pair under the cards
+  await expect(page.getByRole("link", { name: /^Get Quote/ }).filter({ visible: true })).toHaveCount(0);
+
+  const size = (locator: ReturnType<typeof page.locator>) => locator.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(await size(cards.first().getByRole("heading"))).toBeGreaterThanOrEqual(18);
+  expect(await size(cards.first().locator("p").first())).toBeGreaterThanOrEqual(16);
+  const sectionTitle = await size(page.locator("#services-heading"));
+  expect(sectionTitle).toBeGreaterThanOrEqual(22);
+  expect(sectionTitle).toBeLessThanOrEqual(24);
+
+  // Search goes to the products
+  await header.getByRole("searchbox").fill("cards");
+  await header.getByRole("searchbox").press("Enter");
+  await expect(page).toHaveURL(/\/products\?q=cards/);
+  await noSideScroll(page);
+});
+
+test("app: the last content is never hidden behind the tab bar", async ({ page }) => {
+  await page.goto("/services?app=1");
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const tabs = (await page.getByRole("navigation", { name: "App" }).boundingBox())!;
+  const footer = (await page.locator("footer").boundingBox())!;
+  expect(footer.y + footer.height).toBeLessThanOrEqual(tabs.y + 1);
+});
+
+test("normal phone browser: the home hero and service buttons are unchanged", async ({ page }) => {
+  await page.goto("/?app=0");
+  await expect(page.getByTestId("app-home-header")).toBeHidden();
+  await expect(page.getByTestId("app-steps")).toBeHidden();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Get Quote/ }).first()).toBeVisible();
+  await expect(page.getByTestId("app-card-actions").first()).toBeHidden();
+});

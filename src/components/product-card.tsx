@@ -30,8 +30,8 @@ export function ProductCard({ product }: { product: ProductCardData }) {
       </div>
       <div className="flex flex-1 flex-col p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-accent">{product.category.name}</p>
-        <h3 className="mt-1 font-semibold group-hover:text-brand">{product.name}</h3>
-        {product.summary && <p className="mt-1 line-clamp-2 text-sm text-muted">{product.summary}</p>}
+        <h3 className="app-card-title mt-1 font-semibold group-hover:text-brand">{product.name}</h3>
+        {product.summary && <p className="app-card-text mt-1 line-clamp-2 text-sm text-muted">{product.summary}</p>}
         <p className="mt-auto pt-3 text-sm">
           From <span className="font-bold">{formatPKR(startingUnitPrice(product))}</span>
           <span className="text-muted">

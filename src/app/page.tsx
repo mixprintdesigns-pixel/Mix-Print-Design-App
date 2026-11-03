@@ -5,6 +5,7 @@ import { ReviewCard } from "@/components/reviews/review-card";
 import { CategoryCard } from "@/components/catalog/category-card";
 import { JsonLd } from "@/components/catalog/json-ld";
 import { QuoteButtons } from "@/components/services/quote-buttons";
+import { AppHomeHeader, AppSteps } from "@/components/app/app-home-header";
 import { getCategoryTree, getFeaturedProducts } from "@/lib/catalog/queries";
 import { categoryUrl, serviceUrl } from "@/lib/catalog/tree";
 import { pageMetadata } from "@/lib/content/seo-pages";
@@ -16,6 +17,14 @@ import { formatPKR } from "@/lib/money";
 import { formatPercent } from "@/lib/pricing";
 
 export const generateMetadata = () => pageMetadata("home");
+
+/** "How it works": in the website hero, and in the installed app as a swipeable row lower down. */
+const STEPS = [
+  ["1", "Choose & configure", "Size, paper, finish and quantity with live pricing."],
+  ["2", "Upload or request design", "Send your file or brief our design team."],
+  ["3", "Approve your proof", "Nothing is printed until you approve it."],
+  ["4", "Track delivery", "Follow your order from press to doorstep."],
+];
 
 /** Customer reviews as structured data on the business (shown in search results as star ratings). */
 function reviewsJsonLd(reviews: Awaited<ReturnType<typeof getPublishedReviews>>) {
@@ -53,8 +62,10 @@ export default async function HomePage() {
   return (
     <>
       {reviewData && <JsonLd data={reviewData} />}
+      {/* The installed app: a compact header (greeting, search, service chips) instead of the hero */}
+      <AppHomeHeader chips={[...services.map((s) => ({ href: serviceUrl(s.path), label: s.name })), { href: "/products", label: "All products" }]} />
       {/* 1. Hero */}
-      <section className="relative overflow-hidden border-b border-border bg-surface">
+      <section className="relative overflow-hidden border-b border-border bg-surface app:hidden!">
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-24 h-80 w-80 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-[1.15fr_1fr] md:items-center md:py-20">
@@ -83,12 +94,7 @@ export default async function HomePage() {
             </div>
           </div>
           <ol className="grid grid-cols-2 gap-3 text-sm">
-            {[
-              ["1", "Choose & configure", "Size, paper, finish and quantity with live pricing."],
-              ["2", "Upload or request design", "Send your file or brief our design team."],
-              ["3", "Approve your proof", "Nothing is printed until you approve it."],
-              ["4", "Track delivery", "Follow your order from press to doorstep."],
-            ].map(([n, title, text]) => (
+            {STEPS.map(([n, title, text]) => (
               <li key={n} className="card p-4">
                 <span className="text-2xl font-black text-brand">{n}</span>
                 <p className="mt-1 font-semibold">{title}</p>
@@ -101,7 +107,7 @@ export default async function HomePage() {
 
       {/* 2. The four main services */}
       {services.length > 0 && (
-        <section className="mx-auto max-w-6xl px-4 pt-12" aria-labelledby="services-heading">
+        <section className="mx-auto max-w-6xl px-4 pt-12 app:pt-6" aria-labelledby="services-heading">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-sm font-semibold uppercase tracking-widest text-accent">What we do</p>
@@ -117,12 +123,17 @@ export default async function HomePage() {
             {services.map((s, i) => (
               <div key={s.id} className="flex flex-col gap-2">
                 <CategoryCard category={s} href={serviceUrl(s.path)} index={i} />
-                <QuoteButtons subject={s.name} compact />
+                {/* The installed app has one action row inside the card instead */}
+                <div className="app:hidden!">
+                  <QuoteButtons subject={s.name} compact />
+                </div>
               </div>
             ))}
           </div>
         </section>
       )}
+
+      <AppSteps steps={STEPS} />
 
       {/* 3. Featured products */}
       {featured.length > 0 && (

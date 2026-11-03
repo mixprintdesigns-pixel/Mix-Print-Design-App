@@ -14,6 +14,8 @@ export function ServiceVisual({
   index = 0,
   sizes = "(min-width: 1024px) 33vw, 100vw",
   priority = false,
+  className = "",
+  initialsClassName = "",
 }: {
   title: string;
   imageUrl: string | null;
@@ -22,9 +24,12 @@ export function ServiceVisual({
   sizes?: string;
   /** Load eagerly: only for the main image at the top of a page. */
   priority?: boolean;
+  /** Extra classes, e.g. a compact app-mode shape (app:...). */
+  className?: string;
+  initialsClassName?: string;
 }) {
   return (
-    <div className="relative aspect-[16/10] overflow-hidden bg-background">
+    <div className={`relative aspect-[16/10] overflow-hidden bg-background ${className}`}>
       {imageUrl ? (
         <Image
           src={imageUrl}
@@ -38,7 +43,7 @@ export function ServiceVisual({
         />
       ) : (
         <div className={`grid h-full place-items-center bg-gradient-to-br ${gradients[index % gradients.length]}`} aria-hidden>
-          <span className="text-5xl font-black tracking-tight text-white/90 drop-shadow">
+          <span className={`text-5xl font-black tracking-tight text-white/90 drop-shadow ${initialsClassName}`}>
             {title
               .split(/\s+/)
               .filter((w) => /^[a-z0-9]/i.test(w))

@@ -64,10 +64,20 @@ export function MoreRow({ icon, children }: { icon: ReactNode; children: ReactNo
 
 const MORE_PATHS = [...MORE_LINKS.map((l) => l.href), "/account", "/login", "/register", "/admin"];
 
-export function AppTabBar({ account, social }: { account: ReactNode; social: ReactNode }) {
-  const pathname = usePathname();
+type TabBarProps = { account: ReactNode; social: ReactNode };
+
+export function AppTabBar(props: TabBarProps) {
+  return <TabBar pathname={usePathname()} {...props} />;
+}
+
+/** Shown while the page address streams in, so the tab bar is on screen from the very first paint. */
+export function AppTabBarFallback() {
+  return <TabBar pathname="" account={null} social={null} />;
+}
+
+function TabBar({ pathname, account, social }: TabBarProps & { pathname: string }) {
   const [open, setOpen] = useState(false);
-  const moreActive = MORE_PATHS.some((p) => pathname.startsWith(p));
+  const moreActive = pathname !== "" && MORE_PATHS.some((p) => pathname.startsWith(p));
 
   // Close the sheet when a page opens, and stop the page behind it from scrolling while it is open.
   useEffect(() => {
@@ -82,7 +92,7 @@ export function AppTabBar({ account, social }: { account: ReactNode; social: Rea
   }, [open]);
 
   return (
-    <div className="hidden app:block" data-testid="app-nav">
+    <div className="hidden app:block!" data-testid="app-nav">
       {open && (
         <div
           className="fixed inset-0 z-[60] flex flex-col bg-background"
