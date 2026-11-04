@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/admin/action-form";
 import { requireStaff } from "@/lib/auth/session";
-import { listRatePages, rateServiceChoices, readRateSettings } from "@/lib/rates/admin";
+import { RateFeaturesEditor } from "@/components/admin/rates/rate-features-editor";
+import { listRatePages, rateServiceChoices, readRateFeatures, readRateSettings } from "@/lib/rates/admin";
 import { formatRs } from "@/lib/rates/calculator";
-import { publicItems } from "@/lib/rates/visibility";
 import { paisaToRupeesInput } from "@/lib/admin/product-input";
 import { createRatePageAction, saveRateSettingsAction } from "../rates-actions";
 
@@ -11,7 +11,7 @@ export const metadata = { title: "Rates" };
 
 export default async function AdminRatesPage() {
   await requireStaff(["ADMIN"]);
-  const [pages, choices, settings] = await Promise.all([listRatePages(), rateServiceChoices(), readRateSettings()]);
+  const [pages, choices, settings, features] = await Promise.all([listRatePages(), rateServiceChoices(), readRateSettings(), readRateFeatures()]);
   const taken = new Set(pages.map((p) => p.categoryId));
   const free = choices.filter((c) => !taken.has(c.id));
 
@@ -19,10 +19,10 @@ export default async function AdminRatesPage() {
     <>
       <h1 className="text-2xl font-bold">Rates</h1>
       <p className="mt-1 max-w-3xl text-sm text-muted">
-        Prices per square foot with a size calculator, for sign boards (Backlit, Front-lit and any board type) and Digital Printing (flex and stickers).
-        Each rate page appears on its service page. Open a page to add or edit its items: name, sub-title, description, image and rate (or a rate for
-        each GSM / series). Items and options with rate 0, or hidden, are not shown. Customers see the price live and order through the normal Order now
-        flow (saved with the affiliate, then WhatsApp).
+        Prices per square foot with a size calculator. Each rate page appears on its service page (e.g. Digital Printing, Backlit Sign Board) and holds
+        one or more sections: a blue title bar, its rate buttons and the calculator. Each section has a pricing rule: Flex (each side to the next full
+        foot), Sticker (4.5 ft media roll) or Sign Board (each side to the next full foot, one rate per quality with feature ticks). Buttons with rate 0, or
+        hidden, are not shown. Customers click a rate, enter the size, press CHECK and order through the normal Order now flow.
       </p>
 
       <section className="mt-6" aria-labelledby="rate-pages-heading">
@@ -35,7 +35,7 @@ export default async function AdminRatesPage() {
               <tr>
                 <th className="px-4 py-2">Page title (H1)</th>
                 <th className="px-4 py-2">Shown on</th>
-                <th className="px-4 py-2">Items on the website</th>
+                <th className="px-4 py-2">Sections on the website</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
@@ -56,7 +56,7 @@ export default async function AdminRatesPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {publicItems(p.items).length} of {p.items.length}
+                    {p.liveSections} of {p.sectionCount}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link href={`/admin/rates/${p.id}`} className="btn-secondary px-3 py-1.5 text-xs">
@@ -111,31 +111,34 @@ export default async function AdminRatesPage() {
 
       <section className="card mt-8 p-5" aria-labelledby="rate-settings-heading">
         <h2 id="rate-settings-heading" className="text-lg font-bold">
-          Charges and options
+          Designing charges
         </h2>
         <ActionForm action={saveRateSettingsAction} className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="block">
-            <span className="label">Design charges (Rs, added to every order from these pages)</span>
+            <span className="label">Designing charges (Rs, added to every order from the rate sections)</span>
             <input name="designCharge" className="input" inputMode="decimal" defaultValue={paisaToRupeesInput(settings.designChargeMinor)} required />
             <span className="mt-1 block text-xs text-muted">Shown as its own line. Customers cannot remove or change it. Now: {formatRs(settings.designChargeMinor)}.</span>
           </label>
           <label className="block">
             <span className="label">Minimum printing cost (Rs, optional)</span>
             <input name="minOrder" className="input" inputMode="decimal" defaultValue={settings.minOrderMinor ? paisaToRupeesInput(settings.minOrderMinor) : ""} placeholder="No minimum" />
-            <span className="mt-1 block text-xs text-muted">If the size × rate comes to less, this amount is charged for printing instead.</span>
-          </label>
-          <label className="block">
-            <span className="label">GSM options (for flex), separated by commas</span>
-            <input name="gsmOptions" className="input" defaultValue={settings.gsmOptions.join(", ")} />
-          </label>
-          <label className="block">
-            <span className="label">Series options (for stickers), one per line</span>
-            <textarea name="seriesOptions" className="input min-h-24" defaultValue={settings.seriesOptions.join("\n")} />
+            <span className="mt-1 block text-xs text-muted">Leave empty for none. If set and the size × rate comes to less, this amount is charged for printing instead.</span>
           </label>
           <div className="sm:col-span-2">
-            <SubmitButton className="btn-primary">Save charges and options</SubmitButton>
+            <SubmitButton className="btn-primary">Save charges</SubmitButton>
           </div>
         </ActionForm>
+      </section>
+
+      <section className="card mt-8 p-5" aria-labelledby="rate-features-heading">
+        <h2 id="rate-features-heading" className="text-lg font-bold">
+          Features list (sign boards)
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          One list for all sign board qualities (e.g. waterproof, LED type, acrylic, frame, warranty). Every quality shows the full list: ✓ on the features
+          you tick for it (open the quality on its rate page), the others greyed out.
+        </p>
+        <RateFeaturesEditor features={features} />
       </section>
     </>
   );

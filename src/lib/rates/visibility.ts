@@ -1,69 +1,91 @@
-// What the website shows from the rate data: hidden items and variants, and anything with a rate of 0, are left out.
+// What the website shows from the rate data. Hidden sections, groups and buttons, and anything with a rate
+// of 0, are left out.
+//
+// A section (blue title bar) has groups:
+// - FLEX: rows of buttons. The first row sits under the title bar; each further row has its own bar with its
+//   name (e.g. "Most Famous Flex Names").
+// - STICKER: one column per sticker type, each with its series buttons.
+// - SIGN_BOARD: one card per quality, with one rate (its button), the features checklist and a description.
 
-export type RateVariantType = "NONE" | "GSM" | "SERIES";
+import type { PricingRule } from "./calculator";
+
+export type RateSectionKind = "FLEX" | "STICKER" | "SIGN_BOARD";
 
 export type RateVariantRow = { id: string; label: string; rateMinor: number; isVisible: boolean; sortOrder: number };
 export type RateItemRow = {
   id: string;
-  section: string | null;
   name: string;
   subtitle: string | null;
   description: string | null;
   imageUrl: string | null;
   imageAlt: string | null;
   rateMinor: number;
-  variantType: RateVariantType;
   isVisible: boolean;
   sortOrder: number;
+  featureIds: string[];
   variants: RateVariantRow[];
 };
+export type RateSectionRow = { id: string; title: string; kind: RateSectionKind; isVisible: boolean; sortOrder: number; items: RateItemRow[] };
+export type RateFeatureRow = { id: string; label: string; isVisible: boolean; sortOrder: number };
 
-export type PublicRateVariant = { id: string; label: string; rateMinor: number };
-export type PublicRateItem = Omit<RateItemRow, "isVisible" | "sortOrder" | "variants"> & { variants: PublicRateVariant[] };
+export type PublicButton = { id: string; label: string; rateMinor: number };
+export type PublicGroup = {
+  id: string;
+  name: string;
+  subtitle: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  imageAlt: string | null;
+  buttons: PublicButton[];
+  /** Sign boards: the full features list, ticked where this quality includes it. */
+  features: { label: string; included: boolean }[];
+};
+export type PublicSection = { id: string; title: string; kind: RateSectionKind; groups: PublicGroup[] };
 
-/** The variants a customer can choose: visible, with a rate set. */
-export function publicVariants(variants: RateVariantRow[]): PublicRateVariant[] {
-  return variants
-    .filter((v) => v.isVisible && v.rateMinor > 0)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map(({ id, label, rateMinor }) => ({ id, label, rateMinor }));
+/** The pricing rule a section uses. */
+export const ruleFor = (kind: RateSectionKind): PricingRule => kind;
+
+const byOrder = <T extends { sortOrder: number }>(rows: T[]) => [...rows].sort((a, b) => a.sortOrder - b.sortOrder);
+
+export function publicButtons(variants: RateVariantRow[]): PublicButton[] {
+  return byOrder(variants.filter((v) => v.isVisible && v.rateMinor > 0)).map(({ id, label, rateMinor }) => ({ id, label, rateMinor }));
 }
 
-/** The item as the website shows it, or null when it is hidden or has no rate. */
-export function publicItem(item: RateItemRow): PublicRateItem | null {
+/** A group as shown, or null when it is hidden or has nothing with a rate. */
+export function publicGroup(kind: RateSectionKind, item: RateItemRow, features: RateFeatureRow[] = []): PublicGroup | null {
   if (!item.isVisible) return null;
-  const { isVisible: _v, sortOrder: _s, variants, ...rest } = item;
-  if (item.variantType === "NONE") return item.rateMinor > 0 ? { ...rest, variants: [] } : null;
-  const shown = publicVariants(variants);
-  return shown.length > 0 ? { ...rest, variants: shown } : null;
-}
-
-export function publicItems(items: RateItemRow[]): PublicRateItem[] {
-  return [...items].sort((a, b) => a.sortOrder - b.sortOrder).map(publicItem).filter((i): i is PublicRateItem => i !== null);
-}
-
-/** The lowest rate per sq ft an item can be ordered at (for "from" prices and structured data). */
-export function lowestRate(item: PublicRateItem): number {
-  return item.variants.length > 0 ? Math.min(...item.variants.map((v) => v.rateMinor)) : item.rateMinor;
-}
-
-/** The rate for the chosen variant (or the item's own rate when it has no variants); null if not available. */
-export function rateFor(item: PublicRateItem, variantId: string | null | undefined): { rateMinor: number; variant: PublicRateVariant | null } | null {
-  if (item.variantType === "NONE") return item.rateMinor > 0 ? { rateMinor: item.rateMinor, variant: null } : null;
-  const variant = item.variants.find((v) => v.id === variantId);
-  return variant ? { rateMinor: variant.rateMinor, variant } : null;
-}
-
-export const VARIANT_LABEL: Record<RateVariantType, string> = { NONE: "", GSM: "GSM", SERIES: "Series" };
-
-/** Items grouped by their section, in the order the sections first appear (no section = a group named ""). */
-export function groupBySection<T extends { section: string | null }>(items: T[]): { section: string; items: T[] }[] {
-  const groups: { section: string; items: T[] }[] = [];
-  for (const item of items) {
-    const section = item.section?.trim() ?? "";
-    const group = groups.find((g) => g.section === section);
-    if (group) group.items.push(item);
-    else groups.push({ section, items: [item] });
+  const base = { id: item.id, name: item.name, subtitle: item.subtitle, description: item.description, imageUrl: item.imageUrl, imageAlt: item.imageAlt };
+  if (kind === "SIGN_BOARD") {
+    if (!(item.rateMinor > 0)) return null;
+    const list = byOrder(features.filter((f) => f.isVisible)).map((f) => ({ label: f.label, included: item.featureIds.includes(f.id) }));
+    return { ...base, buttons: [{ id: item.id, label: item.subtitle || item.name, rateMinor: item.rateMinor }], features: list };
   }
-  return groups;
+  const buttons = publicButtons(item.variants);
+  return buttons.length > 0 ? { ...base, buttons, features: [] } : null;
+}
+
+export function publicSection(section: RateSectionRow, features: RateFeatureRow[] = []): PublicSection | null {
+  if (!section.isVisible) return null;
+  const groups = byOrder(section.items)
+    .map((i) => publicGroup(section.kind, i, features))
+    .filter((g): g is PublicGroup => g !== null);
+  return groups.length > 0 ? { id: section.id, title: section.title, kind: section.kind, groups } : null;
+}
+
+export function publicSections(sections: RateSectionRow[], features: RateFeatureRow[] = []): PublicSection[] {
+  return byOrder(sections)
+    .map((s) => publicSection(s, features))
+    .filter((s): s is PublicSection => s !== null);
+}
+
+/** The lowest rate per sq ft on offer (for "from" prices and structured data). */
+export function lowestRate(sections: PublicSection[]): number {
+  return Math.min(...sections.flatMap((s) => s.groups.flatMap((g) => g.buttons.map((b) => b.rateMinor))));
+}
+
+/** The order line name for a button: "Flex 240 GSM", "China Flex 240 GSM", "Vinyl Sticker 2000 series", or the quality's name. */
+export function buttonName(section: Pick<PublicSection, "kind" | "groups">, group: PublicGroup, button: PublicButton): string {
+  if (section.kind === "SIGN_BOARD") return group.name;
+  const isNamedRow = section.kind === "FLEX" && section.groups.indexOf(group) > 0;
+  return isNamedRow || button.label.toLowerCase().startsWith(group.name.toLowerCase()) ? button.label : `${group.name} ${button.label}`;
 }

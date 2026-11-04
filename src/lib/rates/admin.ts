@@ -6,11 +6,13 @@ import { toSlug } from "@/lib/slug";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { descriptiveKey, toWebp } from "@/lib/storage/webp";
 import { parseRupees } from "@/lib/admin/product-input";
-import { DEFAULT_RATE_SETTINGS, itemSelect, readRateSettings } from "./queries";
-import type { RateVariantType } from "./visibility";
+import { itemSelect, readRateFeatures, readRateSettings } from "./queries";
+import { publicSections, type RateSectionKind } from "./visibility";
 
-// Admin → Rates: everything about the rate pages is managed here. Nothing is ever deleted: items and variants
-// are hidden instead, and a rate of 0 also keeps them off the website.
+// Admin → Rates: everything about the rate pages is managed here: pages (one per service page), their sections
+// (blue title bar + pricing rule), the button rows / sticker types / sign board qualities in each section, every
+// button and rate, the features list and the designing charges. Rate 0 or "hidden" keeps anything off the website;
+// the owner can also delete sections, rows and buttons (with a confirmation).
 
 /** Rate pages can be placed on these main services (and any page inside them). */
 export const RATE_SERVICE_ROOTS = ["board-maker", "digital-printing"];
@@ -35,16 +37,25 @@ export async function rateServiceChoices() {
 }
 
 export async function listRatePages() {
-  const [pages, choices] = await Promise.all([
+  const [pages, choices, features] = await Promise.all([
     prisma.ratePage.findMany({
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-      select: { id: true, title: true, isVisible: true, categoryId: true, items: { select: itemSelect } },
+      select: { id: true, title: true, isVisible: true, categoryId: true, sections: { select: { id: true, title: true, kind: true, isVisible: true, sortOrder: true, items: { select: itemSelect } } } },
     }),
     rateServiceChoices(),
+    readRateFeatures(),
   ]);
   return pages.map((p) => {
     const category = choices.find((c) => c.id === p.categoryId);
-    return { ...p, category: category ? { name: category.name, path: category.path, isVisible: category.isVisible } : null };
+    return {
+      id: p.id,
+      title: p.title,
+      isVisible: p.isVisible,
+      categoryId: p.categoryId,
+      sectionCount: p.sections.length,
+      liveSections: p.isVisible ? publicSections(p.sections, features).length : 0,
+      category: category ? { name: category.name, path: category.path, isVisible: category.isVisible } : null,
+    };
   });
 }
 
@@ -60,7 +71,17 @@ export async function getRatePageForAdmin(id: string) {
       isVisible: true,
       sortOrder: true,
       categoryId: true,
-      items: { select: { ...itemSelect, imageKey: true }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+      sections: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          title: true,
+          kind: true,
+          isVisible: true,
+          sortOrder: true,
+          items: { select: { ...itemSelect, imageKey: true }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+        },
+      },
     },
   });
   if (!page) return null;
@@ -69,25 +90,46 @@ export async function getRatePageForAdmin(id: string) {
   return { ...page, category };
 }
 
-export { readRateSettings };
+export { readRateSettings, readRateFeatures };
 
-// ─── Settings ────────────────────────────────────────────────────────────────
+// ─── Settings and the features list ──────────────────────────────────────────
 
 export async function saveRateSettings(data: FormData) {
-  const designChargeMinor = rupees(data.get("designCharge"), "Design charges");
+  const designChargeMinor = rupees(data.get("designCharge"), "Designing charges");
   const minText = clean(data.get("minOrder"), 20);
   const minOrderMinor = minText ? rupees(minText, "Minimum order") : null;
-  const gsmOptions = [...new Set(clean(data.get("gsmOptions"), 500).split(/[,\s]+/).filter(Boolean).map(Number))];
-  if (gsmOptions.some((g) => !Number.isInteger(g) || g < 1 || g > 2000)) throw new AdminInputError("GSM options: whole numbers separated by commas, e.g. 200, 220, 240.");
-  const seriesOptions = [...new Set(clean(data.get("seriesOptions"), 1000).split(/\n|,/).map((s) => s.trim().slice(0, 60)).filter(Boolean))];
-  const values = {
-    designChargeMinor,
-    minOrderMinor: minOrderMinor || null,
-    gsmOptions: gsmOptions.length ? gsmOptions.sort((a, b) => a - b) : DEFAULT_RATE_SETTINGS.gsmOptions,
-    seriesOptions: seriesOptions.length ? seriesOptions : DEFAULT_RATE_SETTINGS.seriesOptions,
-  };
+  const values = { designChargeMinor, minOrderMinor: minOrderMinor || null };
   await prisma.rateSettings.upsert({ where: { id: "default" }, create: { id: "default", ...values }, update: values });
 }
+
+/**
+ * Saves the master features list. Rows: f_id_i, f_label_i, f_order_i, f_on_i, f_del_i (existing) and
+ * f_new_i (new labels). A deleted feature is also unticked on every quality.
+ */
+export async function saveRateFeatures(data: FormData) {
+  const count = Math.min(Number.parseInt(clean(data.get("f_count"), 4), 10) || 0, 200);
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < count; i++) {
+      const id = clean(data.get(`f_id_${i}`), 50);
+      if (!id) continue;
+      if (data.get(`f_del_${i}`) === "on") {
+        await tx.rateFeature.delete({ where: { id } });
+        await tx.$executeRaw`UPDATE "RateItem" SET "featureIds" = array_remove("featureIds", ${id}) WHERE ${id} = ANY("featureIds")`;
+        continue;
+      }
+      const label = clean(data.get(`f_label_${i}`), 80);
+      if (!label) throw new AdminInputError("A feature cannot be empty: tick Delete to remove it.");
+      await tx.rateFeature.update({ where: { id }, data: { label, sortOrder: order(data.get(`f_order_${i}`)), isVisible: data.get(`f_on_${i}`) === "on" } });
+    }
+    const last = await tx.rateFeature.findFirst({ orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+    let next = (last?.sortOrder ?? -1) + 1;
+    for (const label of data.getAll("f_new").map((v) => clean(v, 80)).filter(Boolean)) {
+      await tx.rateFeature.create({ data: { label, sortOrder: next++ } });
+    }
+  });
+}
+
+const order = (v: FormDataEntryValue | null) => Number.parseInt(clean(v, 6), 10) || 0;
 
 // ─── Pages ───────────────────────────────────────────────────────────────────
 
@@ -117,10 +159,20 @@ export async function createRatePage(data: FormData): Promise<{ id: string; crea
     if (await prisma.ratePage.findUnique({ where: { categoryId } })) throw new AdminInputError("That service page already has rates: open it from the list.");
   }
 
-  const name = choices.find((c) => c.id === categoryId)?.name ?? newBoard;
+  const chosen = choices.find((c) => c.id === categoryId);
+  const name = chosen?.name ?? newBoard;
+  const isBoard = createdCategory || choices.find((c) => c.id === chosen?.rootId)?.slug === "board-maker";
   const title = clean(data.get("title"), 160) || `${name} Price per Sq Ft in Lahore`;
   const count = await prisma.ratePage.count();
-  const page = await prisma.ratePage.create({ data: { categoryId, title, sortOrder: count } });
+  const page = await prisma.ratePage.create({
+    data: {
+      categoryId,
+      title,
+      sortOrder: count,
+      // Sign boards start with their section, ready for qualities
+      ...(isBoard ? { sections: { create: { title: `${name} Rate per sq ft (Rs)`, kind: "SIGN_BOARD" } } } : {}),
+    },
+  });
   return { id: page.id, createdCategory };
 }
 
@@ -135,27 +187,64 @@ export async function saveRatePage(id: string, data: FormData) {
       seoTitle: optional(data.get("seoTitle"), 70),
       seoDescription: optional(data.get("seoDescription"), 170),
       isVisible: data.get("isVisible") === "on",
-      sortOrder: Number.parseInt(clean(data.get("sortOrder"), 6), 10) || 0,
+      sortOrder: order(data.get("sortOrder")),
     },
   });
 }
 
-// ─── Items ───────────────────────────────────────────────────────────────────
+// ─── Sections ────────────────────────────────────────────────────────────────
 
-const VARIANT_TYPES: RateVariantType[] = ["NONE", "GSM", "SERIES"];
-const variantType = (v: FormDataEntryValue | null): RateVariantType => (VARIANT_TYPES.includes(String(v) as RateVariantType) ? (String(v) as RateVariantType) : "NONE");
+const KINDS: RateSectionKind[] = ["FLEX", "STICKER", "SIGN_BOARD"];
+function kind(v: FormDataEntryValue | null): RateSectionKind {
+  const k = String(v ?? "") as RateSectionKind;
+  if (!KINDS.includes(k)) throw new AdminInputError("Choose the pricing rule: Flex, Sticker or Sign Board.");
+  return k;
+}
+const variantTypeFor = (k: RateSectionKind) => (k === "FLEX" ? "GSM" : k === "STICKER" ? "SERIES" : "NONE");
 
-export async function addRateItem(pageId: string, data: FormData): Promise<string> {
+export async function addRateSection(pageId: string, data: FormData) {
+  const title = clean(data.get("title"), 120);
+  if (title.length < 3) throw new AdminInputError("Enter the section title, e.g. Flex GSM & Rate per sq ft (Rs).");
+  const last = await prisma.rateSection.findFirst({ where: { pageId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+  await prisma.rateSection.create({ data: { pageId, title, kind: kind(data.get("kind")), sortOrder: (last?.sortOrder ?? -1) + 1 } });
+}
+
+export async function saveRateSection(id: string, data: FormData) {
+  const title = clean(data.get("title"), 120);
+  if (title.length < 3) throw new AdminInputError("Enter the section title.");
+  const k = kind(data.get("kind"));
+  await prisma.$transaction([
+    prisma.rateSection.update({ where: { id }, data: { title, kind: k, sortOrder: order(data.get("sortOrder")), isVisible: data.get("isVisible") === "on" } }),
+    prisma.rateItem.updateMany({ where: { sectionId: id }, data: { variantType: variantTypeFor(k) } }),
+  ]);
+}
+
+/** Deletes a section with its rows / qualities and buttons (the owner confirms first). */
+export async function deleteRateSection(id: string) {
+  await prisma.$transaction(async (tx) => {
+    const items = await tx.rateItem.findMany({ where: { sectionId: id }, select: { id: true, imageKey: true } });
+    await tx.rateVariant.deleteMany({ where: { itemId: { in: items.map((i) => i.id) } } });
+    await tx.rateItem.deleteMany({ where: { sectionId: id } });
+    await tx.rateSection.delete({ where: { id } });
+    for (const i of items) if (i.imageKey) await deleteFile(i.imageKey).catch(() => {});
+  });
+}
+
+// ─── Rows, sticker types and qualities (RateItem) and their buttons ──────────
+
+export async function addRateGroup(sectionId: string, data: FormData): Promise<string> {
   const name = clean(data.get("name"), 120);
-  if (name.length < 2) throw new AdminInputError("Enter the item name.");
-  const last = await prisma.rateItem.findFirst({ where: { pageId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+  if (name.length < 2) throw new AdminInputError("Enter the name.");
+  const section = await prisma.rateSection.findUnique({ where: { id: sectionId }, select: { pageId: true, kind: true } });
+  if (!section) throw new AdminInputError("This section no longer exists.");
+  const last = await prisma.rateItem.findFirst({ where: { sectionId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
   const item = await prisma.rateItem.create({
     data: {
-      pageId,
+      pageId: section.pageId,
+      sectionId,
       name,
-      section: optional(data.get("section"), 60),
       subtitle: optional(data.get("subtitle"), 80),
-      variantType: variantType(data.get("variantType")),
+      variantType: variantTypeFor(section.kind),
       sortOrder: (last?.sortOrder ?? -1) + 1,
     },
   });
@@ -163,45 +252,68 @@ export async function addRateItem(pageId: string, data: FormData): Promise<strin
 }
 
 /**
- * Saves an item and its variants. The form sends one row per GSM / series option (v_label_i, v_rate_i, v_on_i).
- * Variants are updated or added, never deleted; ones not in the form are hidden.
+ * Saves a row / sticker type / quality. Sign board qualities: rate, ticked features (feature_<id>), description.
+ * Flex and sticker rows: their buttons, sent as b_id_i, b_label_i, b_rate_i, b_order_i, b_on_i, b_del_i
+ * (b_count rows; a row without an id is a new button).
  */
-export async function saveRateItem(itemId: string, data: FormData) {
+export async function saveRateGroup(itemId: string, data: FormData) {
+  const item = await prisma.rateItem.findUnique({ where: { id: itemId }, select: { rateSection: { select: { kind: true } } } });
+  if (!item?.rateSection) throw new AdminInputError("This item no longer exists.");
+  const sectionKind = item.rateSection.kind;
   const name = clean(data.get("name"), 120);
-  if (name.length < 2) throw new AdminInputError("Enter the item name.");
-  const type = variantType(data.get("variantType"));
-  const rateMinor = type === "NONE" ? rupees(data.get("rate"), "Rate per sq ft") : undefined;
+  if (name.length < 2) throw new AdminInputError("Enter the name.");
 
-  const rows: { label: string; rateMinor: number; isVisible: boolean; sortOrder: number }[] = [];
-  const count = Math.min(Number.parseInt(clean(data.get("v_count"), 4), 10) || 0, 100);
-  if (type !== "NONE") {
+  type Row = { id: string; label: string; rateMinor: number; isVisible: boolean; sortOrder: number; remove: boolean };
+  const rows: Row[] = [];
+  if (sectionKind !== "SIGN_BOARD") {
+    const count = Math.min(Number.parseInt(clean(data.get("b_count"), 4), 10) || 0, 200);
     for (let i = 0; i < count; i++) {
-      const label = clean(data.get(`v_label_${i}`), 60);
-      if (!label) continue;
-      rows.push({ label, rateMinor: rupees(data.get(`v_rate_${i}`), label), isVisible: data.get(`v_on_${i}`) === "on", sortOrder: i });
+      const id = clean(data.get(`b_id_${i}`), 50);
+      const label = clean(data.get(`b_label_${i}`), 60);
+      const remove = data.get(`b_del_${i}`) === "on";
+      if (!label && !id) continue; // an unused new row
+      if (!label && !remove) throw new AdminInputError("Every button needs its text (e.g. 240 GSM): tick Delete to remove one.");
+      rows.push({ id, label, rateMinor: remove ? 0 : rupees(data.get(`b_rate_${i}`), label || "Rate"), isVisible: data.get(`b_on_${i}`) === "on", sortOrder: order(data.get(`b_order_${i}`)), remove });
     }
+    const labels = rows.filter((r) => !r.remove).map((r) => r.label.toLowerCase());
+    const dup = labels.find((l, i) => labels.indexOf(l) !== i);
+    if (dup) throw new AdminInputError(`Two buttons have the same text (“${dup}”): change one of them.`);
   }
 
+  const features = await readRateFeatures();
   await prisma.$transaction(async (tx) => {
     await tx.rateItem.update({
       where: { id: itemId },
       data: {
         name,
-        section: optional(data.get("section"), 60),
         subtitle: optional(data.get("subtitle"), 80),
         description: optional(data.get("description"), 5000),
         imageAlt: optional(data.get("imageAlt"), 200),
-        variantType: type,
-        ...(rateMinor !== undefined ? { rateMinor } : {}),
         isVisible: data.get("isVisible") === "on",
-        sortOrder: Number.parseInt(clean(data.get("sortOrder"), 6), 10) || 0,
+        sortOrder: order(data.get("sortOrder")),
+        variantType: variantTypeFor(sectionKind),
+        ...(sectionKind === "SIGN_BOARD"
+          ? { rateMinor: rupees(data.get("rate"), "Rate per sq ft"), featureIds: features.filter((f) => data.get(`feature_${f.id}`) === "on").map((f) => f.id) }
+          : {}),
       },
     });
-    for (const row of rows) {
-      await tx.rateVariant.upsert({ where: { itemId_label: { itemId, label: row.label } }, create: { itemId, ...row }, update: row });
+    // Deletes first, so a deleted button's text can be reused straight away
+    const removeIds = rows.filter((r) => r.remove && r.id).map((r) => r.id);
+    if (removeIds.length) await tx.rateVariant.deleteMany({ where: { itemId, id: { in: removeIds } } });
+    for (const r of rows.filter((x) => !x.remove)) {
+      const values = { label: r.label, rateMinor: r.rateMinor, isVisible: r.isVisible, sortOrder: r.sortOrder };
+      if (r.id) await tx.rateVariant.update({ where: { id: r.id, itemId }, data: values });
+      else await tx.rateVariant.create({ data: { itemId, ...values } });
     }
-    await tx.rateVariant.updateMany({ where: { itemId, label: { notIn: rows.map((r) => r.label) } }, data: { isVisible: false } });
   });
+}
+
+/** Deletes a row / sticker type / quality and its buttons (the owner confirms first). */
+export async function deleteRateGroup(itemId: string) {
+  const item = await prisma.rateItem.findUnique({ where: { id: itemId }, select: { imageKey: true } });
+  if (!item) return;
+  await prisma.$transaction([prisma.rateVariant.deleteMany({ where: { itemId } }), prisma.rateItem.delete({ where: { id: itemId } })]);
+  if (item.imageKey) await deleteFile(item.imageKey).catch(() => {});
 }
 
 export async function setRateItemImage(itemId: string, bytes: Uint8Array, alt?: string) {
@@ -219,19 +331,4 @@ export async function removeRateItemImage(itemId: string) {
   if (!item) return;
   await prisma.rateItem.update({ where: { id: itemId }, data: { imageUrl: null, imageKey: null } });
   if (item.imageKey) await deleteFile(item.imageKey).catch(() => {});
-}
-
-/** The variant rows the item form shows: every GSM / series option from the settings, plus any older ones. */
-export function variantRows(
-  type: RateVariantType,
-  settings: { gsmOptions: number[]; seriesOptions: string[] },
-  existing: { label: string; rateMinor: number; isVisible: boolean }[],
-) {
-  if (type === "NONE") return [];
-  const labels = type === "GSM" ? settings.gsmOptions.map((g) => `${g} GSM`) : settings.seriesOptions;
-  const extra = existing.filter((v) => !labels.includes(v.label) && (type === "GSM" ? /GSM$/.test(v.label) : !/GSM$/.test(v.label))).map((v) => v.label);
-  return [...labels, ...extra].map((label) => {
-    const v = existing.find((e) => e.label === label);
-    return { label, rateMinor: v?.rateMinor ?? 0, isVisible: v ? v.isVisible : true };
-  });
 }

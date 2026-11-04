@@ -974,18 +974,19 @@ enum RateVariantType {
 }
 
 model RatePage {
-  id             String     @id @default(cuid())
-  categoryId     String?    @unique // the service page it appears on
-  category       Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  id             String        @id @default(cuid())
+  categoryId     String?       @unique // the service page it appears on
+  category       Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   title          String // H1
   intro          String?
   seoTitle       String?
   seoDescription String?
-  isVisible      Boolean    @default(true)
-  sortOrder      Int        @default(0)
+  isVisible      Boolean       @default(true)
+  sortOrder      Int           @default(0)
   items          RateItem[]
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  sections       RateSection[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model RateItem {
@@ -1004,10 +1005,17 @@ model RateItem {
   isVisible   Boolean         @default(true)
   sortOrder   Int             @default(0)
   variants    RateVariant[]
+  // Rate sections (Nov 2026): the section this item belongs to. In a Flex section an item is a row of buttons
+  // (GSM, Most Famous Flex Names), in a Sticker section a sticker type (column of series buttons), in a
+  // Sign Board section a quality (Normal / Medium / Premium) with its own rate and feature ticks.
+  sectionId   String?
+  rateSection RateSection?    @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  featureIds  String[]        @default([]) // Sign Board qualities: the ticked features (RateFeature ids)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
   @@index([pageId, sortOrder])
+  @@index([sectionId, sortOrder])
 }
 
 model RateVariant {
@@ -1032,4 +1040,43 @@ model RateSettings {
   gsmOptions        Int[]    @default([200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400])
   seriesOptions     String[] @default(["1000 series", "2000 series", "3000 series"])
   updatedAt         DateTime @updatedAt
+}
+
+/**
+ * Flex and Backlit Flex: whole-foot rounding with GSM and famous-name buttons. Sticker: 4.5 ft roll rule with
+ * series buttons per sticker type. Sign Board: whole-foot rounding, one rate per quality with feature ticks.
+ */
+enum RateSectionKind {
+  FLEX
+  STICKER
+  SIGN_BOARD
+}
+
+/**
+ * A rate section on a service page: a blue title bar, its rate buttons and the calculator.
+ */
+model RateSection {
+  id        String          @id @default(cuid())
+  pageId    String
+  page      RatePage        @relation(fields: [pageId], references: [id], onDelete: Restrict)
+  title     String // e.g. "Flex GSM & Rate per sq ft (Rs)"
+  kind      RateSectionKind // layout and pricing rule
+  isVisible Boolean         @default(true)
+  sortOrder Int             @default(0)
+  items     RateItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([pageId, sortOrder])
+}
+
+/**
+ * The master features list for sign board qualities (waterproof, LED type, acrylic, frame, warranty…).
+ */
+model RateFeature {
+  id        String   @id @default(cuid())
+  label     String
+  isVisible Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
 }

@@ -7,12 +7,12 @@ import { createCommissionForOrder } from "@/lib/affiliate/service";
 import { readSiteSettings, whatsappUrl } from "@/lib/content/site-settings";
 import { confirmationPath, orderWhatsAppMessage, type WebsiteOrderResult } from "@/lib/orders/website-order";
 import { quoteRate, SIZE_UNITS, type RateQuote } from "./calculator";
-import { itemSelect, readRateSettings } from "./queries";
-import { publicItem, rateFor, VARIANT_LABEL } from "./visibility";
+import { readRateFeatures, readRateSettings, sectionSelect } from "./queries";
+import { buttonName, publicSection, ruleFor } from "./visibility";
 
 // "Order now" from a rate page (sign boards, flex, stickers): the same flow as a product's Order now. The order is
 // saved first (Pending, unpaid, with the affiliate from the referral cookie), then WhatsApp opens with the order
-// number, material, GSM / series, the size as typed, the billable sq ft and the total.
+// number, item, option, the size as typed, the billable size and the total.
 // The price is always recalculated here from the rates in the database.
 
 const side = z.object({ value: z.coerce.number().min(0).max(100_000), inches: z.coerce.number().min(0).max(100_000).optional() });
@@ -23,7 +23,7 @@ export const rateOrderSchema = z.object({
   unit: z.enum(SIZE_UNITS),
   width: side,
   height: side,
-  quantity: z.coerce.number().int(),
+  quantity: z.coerce.number().int().optional().default(1),
   name: z.string().trim().min(2, "Enter your name.").max(100),
   phone: z
     .string()
@@ -36,37 +36,42 @@ export const rateOrderSchema = z.object({
 export type RateOrderInput = z.infer<typeof rateOrderSchema>;
 
 /** The order lines shown in Admin, on the confirmation page and in the WhatsApp message. */
-export function rateOrderDetails(item: { name: string; subtitle: string | null; variantType: keyof typeof VARIANT_LABEL }, variantLabel: string | null, q: RateQuote) {
+export function rateOrderDetails(sectionTitle: string, itemName: string, optionLabel: string | null, q: RateQuote) {
   return [
-    { option: "Material", value: item.subtitle ? `${item.name} (${item.subtitle})` : item.name },
-    ...(variantLabel ? [{ option: VARIANT_LABEL[item.variantType] || "Option", value: variantLabel }] : []),
+    { option: "Item", value: itemName },
+    ...(optionLabel ? [{ option: "Option", value: optionLabel }] : []),
+    { option: "Rate section", value: sectionTitle },
     { option: "Size", value: q.sizeText },
-    { option: "Billable area", value: `${q.widthFt} ft × ${q.heightFt} ft${q.quantity > 1 ? ` × ${q.quantity}` : ""} = ${q.sqft} sq ft` },
+    { option: "Billable size", value: q.billableText },
+    { option: "Billable area", value: `${q.sqftText} sq ft${q.quantity > 1 ? ` (${q.quantity} pieces)` : ""}` },
     { option: "Rate", value: `${formatPKR(q.rateMinor)} per sq ft` },
-    { option: "Printing cost", value: `${formatPKR(q.printingMinor)}${q.minimumApplied ? " (minimum order)" : ""}` },
-    { option: "Design charges", value: formatPKR(q.designChargeMinor) },
+    ...(q.minimumApplied ? [{ option: "Printing cost", value: `${formatPKR(q.printingMinor)} (minimum order)` }] : []),
+    { option: "Designing charges", value: formatPKR(q.designChargeMinor) },
   ];
 }
 
 export async function placeRateOrder(input: RateOrderInput, ctx: { referralCode: string | null; userId?: string | null }): Promise<WebsiteOrderResult> {
+  const unavailable = { ok: false as const, error: "This rate is not available to order right now. Please message us on WhatsApp." };
   const row = await prisma.rateItem.findFirst({
-    where: { id: input.itemId, page: { isVisible: true, category: { isVisible: true } } },
-    select: itemSelect,
+    where: { id: input.itemId, rateSection: { page: { isVisible: true, category: { isVisible: true } } } },
+    select: { rateSection: { select: sectionSelect } },
   });
-  const item = row ? publicItem(row) : null;
-  const rate = item ? rateFor(item, input.variantId) : null;
-  if (!item || !rate) return { ok: false, error: "This item is not available to order right now. Please message us on WhatsApp." };
+  const [features, settings] = await Promise.all([readRateFeatures(), readRateSettings()]);
+  const section = row?.rateSection ? publicSection(row.rateSection, features) : null;
+  const group = section?.groups.find((g) => g.id === input.itemId);
+  if (!section || !group) return unavailable;
+  // Sign boards: the quality's own rate. Flex and stickers: the button (variant) chosen.
+  const button = section.kind === "SIGN_BOARD" ? group.buttons[0] : group.buttons.find((b) => b.id === input.variantId);
+  if (!button) return unavailable;
 
-  const settings = await readRateSettings();
   const result = quoteRate(
     { unit: input.unit, width: input.width, height: input.height, quantity: input.quantity },
-    { rateMinor: rate.rateMinor, designChargeMinor: settings.designChargeMinor, minOrderMinor: settings.minOrderMinor },
+    { rule: ruleFor(section.kind), rateMinor: button.rateMinor, designChargeMinor: settings.designChargeMinor, minOrderMinor: settings.minOrderMinor },
   );
   if (!result.ok) return { ok: false, error: result.error };
   const q = result.quote;
-  const options = rateOrderDetails(item, rate.variant?.label ?? null, q);
-  const productName = rate.variant ? `${item.name} ${rate.variant.label}` : item.name;
-
+  const productName = buttonName(section, group, button);
+  const options = rateOrderDetails(section.title, productName, section.kind === "SIGN_BOARD" ? group.subtitle : button.label, q);
   const number = `MP-${new Date().getFullYear().toString().slice(2)}${randomBytes(3).toString("hex").toUpperCase()}`;
   const order = await prisma.order.create({
     data: {
@@ -90,7 +95,7 @@ export async function placeRateOrder(input: RateOrderInput, ctx: { referralCode:
             lineTotalMinor: q.printingMinor,
           },
           // Fixed design charges, always their own line.
-          { productName: "Design charges", optionsSummary: [], quantity: 1, unitPriceMinor: q.designChargeMinor, lineTotalMinor: q.designChargeMinor },
+          { productName: "Designing charges", optionsSummary: [], quantity: 1, unitPriceMinor: q.designChargeMinor, lineTotalMinor: q.designChargeMinor },
         ],
       },
       statusEvents: { create: { status: "PENDING_PAYMENT", note: "Placed on the website (rate calculator, Order now)" } },

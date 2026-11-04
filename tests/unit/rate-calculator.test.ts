@@ -1,169 +1,213 @@
 import { describe, expect, it } from "vitest";
-import { billableFeet, formatRs, formatSize, quoteRate, sideInInches, validateSize, type SizeInput } from "@/lib/rates/calculator";
-import { groupBySection, lowestRate, publicItem, publicItems, rateFor, type RateItemRow } from "@/lib/rates/visibility";
+import {
+  billableSides,
+  formatLength,
+  formatRateTag,
+  formatRs,
+  formatSize,
+  quoteRate,
+  sideInInches,
+  validateSize,
+  type PricingRule,
+  type SizeInput,
+} from "@/lib/rates/calculator";
+import { buttonName, lowestRate, publicGroup, publicSections, type RateItemRow, type RateSectionRow } from "@/lib/rates/visibility";
 
-const ftIn = (wFt: number, wIn: number, hFt: number, hIn: number, quantity = 1): SizeInput => ({
-  unit: "ft-in",
-  width: { value: wFt, inches: wIn },
-  height: { value: hFt, inches: hIn },
-  quantity,
-});
-const pricing = { rateMinor: 4500, designChargeMinor: 100_000 }; // Rs 45 per sq ft, Rs 1,000 design
+const ft = (w: [number, number], h: [number, number]): SizeInput => ({ unit: "ft-in", width: { value: w[0], inches: w[1] }, height: { value: h[0], inches: h[1] } });
+const quote = (input: SizeInput, rule: PricingRule, rateMinor = 4500, designChargeMinor = 100_000) => {
+  const r = quoteRate(input, { rule, rateMinor, designChargeMinor });
+  if (!r.ok) throw new Error(r.error);
+  return r.quote;
+};
 
-describe("billing rule: each side rounded UP to the next whole foot", () => {
-  it.each([
-    [3, 1, 4],
-    [4, 2, 5],
-    [10, 3, 11],
-    [5, 0, 5],
-    [0, 1, 1],
-    [11, 11.5, 12],
-    [12, 0, 12],
-  ])("%i ft %i in → %i ft", (ft, inch, expected) => {
-    expect(billableFeet(sideInInches({ value: ft, inches: inch }, "ft-in"))).toBe(expected);
-  });
-
-  it("10 ft 3 in × 5 ft = 11 × 5 = 55 sq ft", () => {
-    const r = quoteRate(ftIn(10, 3, 5, 0), pricing);
-    expect(r.ok && r.quote).toMatchObject({ sizeText: "10 ft 3 in × 5 ft", widthFt: 11, heightFt: 5, sqft: 55 });
+describe("Rule A: Flex, Backlit Flex and Sign Boards: each side to the next whole foot", () => {
+  it.each<[string, SizeInput, string, number]>([
+    ["6 ft 2 in × 3 ft", ft([6, 2], [3, 0]), "7 ft × 3 ft", 21],
+    ["10 ft 3 in × 5 ft", ft([10, 3], [5, 0]), "11 ft × 5 ft", 55],
+    ["4 ft × 3 ft", ft([4, 0], [3, 0]), "4 ft × 3 ft", 12],
+  ])("%s → %s = %i sq ft", (typed, input, billable, sqft) => {
+    for (const rule of ["FLEX", "SIGN_BOARD"] as const) {
+      const q = quote(input, rule);
+      expect(q.sizeText).toBe(typed);
+      expect(q.billableText).toBe(billable);
+      expect(q.sqft).toBe(sqft);
+    }
   });
 
   it("rounds each side separately, never the area", () => {
-    // 3 ft 1 in × 4 ft 2 in: 4 × 5 = 20 sq ft (not 3.08 × 4.17 = 12.8 → 13)
-    const r = quoteRate(ftIn(3, 1, 4, 2), pricing);
-    expect(r.ok && r.quote.sqft).toBe(20);
+    expect(quote(ft([3, 1], [4, 2]), "FLEX").sqft).toBe(20); // 4 × 5, not 3.08 × 4.17 ≈ 13
+  });
+});
+
+describe("Rule B: Stickers on the 4.5 ft media roll", () => {
+  it.each<[string, SizeInput, string, number]>([
+    // 1. both ≤ 4.5 ft: smaller side up to a whole foot, larger exact
+    ["3 ft 6 in × 4 ft 6 in", ft([3, 6], [4, 6]), "4 ft × 4.5 ft", 18],
+    // 2. one ≤ 4.5 ft, the other longer: short side = 4.5 ft, long side exact, either way round
+    ["3 ft × 6 ft", ft([3, 0], [6, 0]), "4.5 ft × 6 ft", 27],
+    ["6 ft 6 in × 3 ft 4 in", ft([6, 6], [3, 4]), "6.5 ft × 4.5 ft", 29.25],
+    // 3. both > 4.5 ft: width up to the next multiple of 4.5 ft, height exact
+    ["14 ft × 6 ft", ft([14, 0], [6, 0]), "18 ft × 6 ft", 108],
+    ["9 ft × 6 ft", ft([9, 0], [6, 0]), "9 ft × 6 ft", 54],
+    ["9 ft 1 in × 6 ft 2 in", ft([9, 1], [6, 2]), "13.5 ft × 6 ft 2 in", 83.25],
+  ])("%s → %s = %d sq ft", (typed, input, billable, sqft) => {
+    const q = quote(input, "STICKER");
+    expect(q.sizeText).toBe(typed);
+    expect(q.billableText).toBe(billable);
+    expect(q.sqft).toBeCloseTo(sqft, 10);
   });
 
-  it("multiplies by the quantity after rounding", () => {
-    const r = quoteRate(ftIn(10, 3, 5, 0, 3), pricing);
-    expect(r.ok && r.quote.sqft).toBe(165);
+  it("13.5 × 6.1667 is shown as 83.25 sq ft", () => {
+    expect(quote(ft([9, 1], [6, 2]), "STICKER").sqftText).toBe("83.25");
+  });
+
+  it("case 2 works whichever side is the short one", () => {
+    expect(quote(ft([6, 0], [3, 0]), "STICKER").sqft).toBe(27);
+    expect(billableSides(36, 72, "STICKER")).toEqual({ width: 54, height: 72 });
+    expect(billableSides(72, 36, "STICKER")).toEqual({ width: 72, height: 54 });
+  });
+
+  it("case 1 never charges more than the roll width for the smaller side", () => {
+    // 4 ft 2 in × 4 ft 4 in: the smaller side would round to 5 ft, but the roll is 4.5 ft
+    expect(quote(ft([4, 2], [4, 4]), "STICKER").billableText).toBe("4.5 ft × 4 ft 4 in");
+  });
+
+  it("exactly 4.5 ft counts as within the roll", () => {
+    expect(quote(ft([4, 6], [8, 0]), "STICKER").sqft).toBe(36); // case 2: 4.5 × 8
   });
 });
 
 describe("unit conversions", () => {
-  it("inches, cm, mm and meters convert exactly", () => {
+  it("inches, cm and mm convert exactly", () => {
     expect(sideInInches({ value: 60 }, "in")).toBe(60);
-    expect(sideInInches({ value: 2.54 }, "cm")).toBeCloseTo(1);
-    expect(sideInInches({ value: 25.4 }, "mm")).toBeCloseTo(1);
-    expect(sideInInches({ value: 1 }, "m")).toBeCloseTo(39.37, 2);
+    expect(sideInInches({ value: 2.54 }, "cm")).toBe(1);
+    expect(sideInInches({ value: 25.4 }, "mm")).toBe(1);
     expect(sideInInches({ value: 10, inches: 3 }, "ft-in")).toBe(123);
   });
 
-  it("exact sizes in other units are not pushed up by rounding noise", () => {
-    expect(billableFeet(sideInInches({ value: 152.4 }, "cm"))).toBe(5); // exactly 5 ft
-    expect(billableFeet(sideInInches({ value: 1524 }, "mm"))).toBe(5);
-    expect(billableFeet(sideInInches({ value: 3.048 }, "m"))).toBe(10);
-    expect(billableFeet(sideInInches({ value: 60 }, "in"))).toBe(5);
-    expect(billableFeet(sideInInches({ value: 61 }, "in"))).toBe(6);
-  });
-
-  it("1 m × 50 cm: 3.28 ft → 4 ft, 1.64 ft → 2 ft = 8 sq ft", () => {
-    const r = quoteRate({ unit: "m", width: { value: 1 }, height: { value: 0.5 }, quantity: 1 }, pricing);
-    expect(r.ok && r.quote).toMatchObject({ widthFt: 4, heightFt: 2, sqft: 8 });
-    const cm = quoteRate({ unit: "cm", width: { value: 100 }, height: { value: 50 }, quantity: 1 }, pricing);
-    expect(cm.ok && cm.quote.sqft).toBe(8);
-  });
-
-  it("shows the size exactly as typed", () => {
-    expect(formatSize(ftIn(10, 3, 5, 0))).toBe("10 ft 3 in × 5 ft");
-    expect(formatSize(ftIn(0, 8, 2, 6))).toBe("8 in × 2 ft 6 in");
-    expect(formatSize({ unit: "cm", width: { value: 120 }, height: { value: 90.5 } })).toBe("120 cm × 90.5 cm");
-    expect(formatSize({ unit: "m", width: { value: 3 }, height: { value: 1.5 } })).toBe("3 m × 1.5 m");
-    expect(formatSize({ unit: "in", width: { value: 48 }, height: { value: 24 } })).toBe("48 in × 24 in");
-  });
-});
-
-describe("price breakdown and the fixed design charge", () => {
-  it("printing = billable sq ft × rate; total adds the design charge", () => {
-    const r = quoteRate(ftIn(10, 3, 5, 0), pricing);
-    expect(r.ok && r.quote).toMatchObject({ rateMinor: 4500, printingMinor: 55 * 4500, designChargeMinor: 100_000, totalMinor: 55 * 4500 + 100_000, minimumApplied: false });
-  });
-
-  it("the design charge is always added, whatever the size", () => {
-    for (const input of [ftIn(1, 0, 1, 0), ftIn(20, 0, 10, 0, 4)]) {
-      const r = quoteRate(input, { rateMinor: 3000, designChargeMinor: 150_000 });
-      expect(r.ok && r.quote.totalMinor - r.quote.printingMinor).toBe(150_000);
+  it("the same size gives the same price in every unit", () => {
+    const sizes: SizeInput[] = [
+      ft([6, 2], [3, 0]),
+      { unit: "in", width: { value: 74 }, height: { value: 36 } },
+      { unit: "cm", width: { value: 187.96 }, height: { value: 91.44 } },
+      { unit: "mm", width: { value: 1879.6 }, height: { value: 914.4 } },
+    ];
+    for (const rule of ["FLEX", "STICKER"] as const) {
+      const totals = sizes.map((s) => quote(s, rule).totalMinor);
+      expect(new Set(totals).size).toBe(1);
     }
   });
 
-  it("a minimum order amount raises small printing costs", () => {
-    const r = quoteRate(ftIn(2, 0, 2, 0), { ...pricing, minOrderMinor: 500_000 });
-    expect(r.ok && r.quote).toMatchObject({ areaCostMinor: 4 * 4500, printingMinor: 500_000, minimumApplied: true, totalMinor: 600_000 });
-    const big = quoteRate(ftIn(20, 0, 10, 0), { ...pricing, minOrderMinor: 500_000 });
-    expect(big.ok && big.quote.minimumApplied).toBe(false);
+  it("exact sizes are not pushed up by rounding noise", () => {
+    expect(quote({ unit: "cm", width: { value: 152.4 }, height: { value: 91.44 } }, "FLEX").sqft).toBe(15); // 5 × 3
+    expect(quote({ unit: "mm", width: { value: 1371.6 }, height: { value: 1828.8 } }, "STICKER").sqft).toBe(27); // 4.5 × 6
   });
 
-  it("rejects missing, negative or huge sizes, bad quantities, and items without a rate", () => {
-    expect(validateSize(ftIn(0, 0, 5, 0))).toMatch(/width/);
-    expect(validateSize(ftIn(5, -1, 5, 0))).toMatch(/valid width/);
-    expect(validateSize(ftIn(600, 0, 5, 0))).toMatch(/too large/);
-    expect(validateSize(ftIn(5, 0, 5, 0, 0))).toMatch(/Quantity/);
-    expect(validateSize(ftIn(5, 0, 5, 0, 1.5))).toMatch(/Quantity/);
-    expect(quoteRate(ftIn(5, 0, 5, 0), { rateMinor: 0, designChargeMinor: 100_000 }).ok).toBe(false);
+  it("shows the size exactly as typed", () => {
+    expect(formatSize(ft([10, 3], [5, 0]))).toBe("10 ft 3 in × 5 ft");
+    expect(formatSize(ft([0, 8], [2, 6]))).toBe("8 in × 2 ft 6 in");
+    expect(formatSize({ unit: "cm", width: { value: 120 }, height: { value: 90.5 } })).toBe("120 cm × 90.5 cm");
+    expect(formatSize({ unit: "in", width: { value: 48 }, height: { value: 24 } })).toBe("48 in × 24 in");
+    expect(formatLength(54)).toBe("4.5 ft");
+    expect(formatLength(74)).toBe("6 ft 2 in");
+  });
+});
+
+describe("total: billable sq ft × rate + fixed designing charges, to the nearest rupee", () => {
+  it("adds the designing charges", () => {
+    const q = quote(ft([10, 3], [5, 0]), "FLEX", 4500, 100_000); // 55 × 45 = 2,475 + 1,000
+    expect(q).toMatchObject({ rateMinor: 4500, designChargeMinor: 100_000, totalMinor: 347_500, printingMinor: 247_500 });
   });
 
-  it("formats rupees for the page", () => {
-    expect(formatRs(4500)).toBe("Rs 45");
+  it("the designing charges are always added, whatever the size or rule", () => {
+    for (const rule of ["FLEX", "STICKER", "SIGN_BOARD"] as const) {
+      for (const input of [ft([1, 0], [1, 0]), ft([20, 0], [10, 0])]) {
+        const q = quote(input, rule, 3000, 150_000);
+        expect(q.totalMinor - q.printingMinor).toBe(150_000);
+      }
+    }
+  });
+
+  it("rounds the total to the nearest whole rupee", () => {
+    // 83.25 sq ft × Rs 45.50 = Rs 3,787.875 + 1,000 = Rs 4,787.875 → Rs 4,788
+    expect(quote(ft([9, 1], [6, 2]), "STICKER", 4550).totalMinor).toBe(478_800);
+    // 29.25 × Rs 33 = Rs 965.25 + 1,000 → Rs 1,965
+    expect(quote(ft([6, 6], [3, 4]), "STICKER", 3300).totalMinor).toBe(196_500);
+    expect(quote(ft([6, 6], [3, 4]), "STICKER", 3300).totalMinor % 100).toBe(0);
+  });
+
+  it("asks for a rate and a valid size", () => {
+    expect(quoteRate(ft([5, 0], [5, 0]), { rule: "FLEX", rateMinor: 0, designChargeMinor: 100_000 })).toEqual({ ok: false, error: "Choose a rate first." });
+    expect(validateSize(ft([0, 0], [5, 0]))).toMatch(/width/);
+    expect(validateSize(ft([5, -1], [5, 0]))).toMatch(/valid width/);
+    expect(validateSize(ft([600, 0], [5, 0]))).toMatch(/too large/);
+  });
+
+  it("formats rupees and button rates", () => {
+    expect(formatRs(347_500)).toBe("Rs 3,475");
     expect(formatRs(4550)).toBe("Rs 45.50");
-    expect(formatRs(1_247_500)).toBe("Rs 12,475");
+    expect(formatRateTag(4500)).toBe("45/-");
   });
 });
 
 const item = (over: Partial<RateItemRow> = {}): RateItemRow => ({
   id: "i1",
-  section: null,
-  name: "China Flex",
+  name: "Flex",
   subtitle: null,
   description: null,
   imageUrl: null,
   imageAlt: null,
   rateMinor: 0,
-  variantType: "NONE",
   isVisible: true,
   sortOrder: 0,
+  featureIds: [],
   variants: [],
   ...over,
 });
+const v = (id: string, label: string, rateMinor: number, sortOrder = 0, isVisible = true) => ({ id, label, rateMinor, isVisible, sortOrder });
 
-describe("variant rates and what the website shows", () => {
-  const flex = item({
-    variantType: "GSM",
-    variants: [
-      { id: "g280", label: "280 GSM", rateMinor: 0, isVisible: true, sortOrder: 5 },
-      { id: "g240", label: "240 GSM", rateMinor: 3500, isVisible: true, sortOrder: 3 },
-      { id: "g300", label: "300 GSM", rateMinor: 4200, isVisible: false, sortOrder: 6 },
-      { id: "g200", label: "200 GSM", rateMinor: 2800, isVisible: true, sortOrder: 1 },
+describe("what the website shows", () => {
+  const flex: RateSectionRow = {
+    id: "s1",
+    title: "Flex GSM & Rate per sq ft (Rs)",
+    kind: "FLEX",
+    isVisible: true,
+    sortOrder: 0,
+    items: [
+      item({ id: "gsm", variants: [v("a", "280 GSM", 5500, 2), v("b", "240 GSM", 4500, 1), v("c", "300 GSM", 0, 3), v("d", "320 GSM", 6500, 4, false)] }),
+      item({ id: "famous", name: "Most Famous Flex Names", sortOrder: 1, variants: [v("e", "China Flex 240 GSM", 4500)] }),
+      item({ id: "empty", name: "Empty row", sortOrder: 2, variants: [v("f", "400 GSM", 0)] }),
     ],
-  });
+  };
 
-  it("hides variants with rate 0 or switched off, in order", () => {
-    expect(publicItem(flex)?.variants.map((v) => v.label)).toEqual(["200 GSM", "240 GSM"]);
-  });
-
-  it("uses the selected variant's rate", () => {
-    const shown = publicItem(flex)!;
-    expect(rateFor(shown, "g240")?.rateMinor).toBe(3500);
-    expect(rateFor(shown, "g200")?.rateMinor).toBe(2800);
-    expect(rateFor(shown, "g300")).toBeNull(); // hidden
-    expect(rateFor(shown, "g280")).toBeNull(); // rate 0
-    expect(lowestRate(shown)).toBe(2800);
-  });
-
-  it("hides items with rate 0, hidden items, and items whose variants all have rate 0", () => {
-    expect(publicItem(item({ rateMinor: 0 }))).toBeNull();
-    expect(publicItem(item({ rateMinor: 5000, isVisible: false }))).toBeNull();
-    expect(publicItem(item({ variantType: "SERIES", variants: [{ id: "s1", label: "1000 series", rateMinor: 0, isVisible: true, sortOrder: 0 }] }))).toBeNull();
-    const single = publicItem(item({ rateMinor: 5000 }))!;
-    expect(rateFor(single, undefined)?.rateMinor).toBe(5000);
-    expect(publicItems([item({ id: "b", sortOrder: 2, rateMinor: 1 }), item({ id: "a", sortOrder: 1, rateMinor: 1 }), item({ id: "z" })]).map((i) => i.id)).toEqual(["a", "b"]);
-  });
-
-  it("groups items into sections in the order they appear", () => {
-    const groups = groupBySection([{ section: "Flex", n: 1 }, { section: "Stickers", n: 2 }, { section: "Flex", n: 3 }, { section: null, n: 4 }]);
-    expect(groups.map((g) => [g.section, g.items.map((i) => i.n)])).toEqual([
-      ["Flex", [1, 3]],
-      ["Stickers", [2]],
-      ["", [4]],
+  it("buttons in order; rate 0 or hidden buttons and empty rows are left out", () => {
+    const [s] = publicSections([flex]);
+    expect(s.groups.map((g) => [g.id, g.buttons.map((b) => b.label)])).toEqual([
+      ["gsm", ["240 GSM", "280 GSM"]],
+      ["famous", ["China Flex 240 GSM"]],
     ]);
+    expect(lowestRate([s])).toBe(4500);
+    expect(publicSections([{ ...flex, isVisible: false }])).toEqual([]);
+  });
+
+  it("order names: the first row adds its name, named rows use the button text", () => {
+    const [s] = publicSections([flex]);
+    expect(buttonName(s, s.groups[0], s.groups[0].buttons[0])).toBe("Flex 240 GSM");
+    expect(buttonName(s, s.groups[1], s.groups[1].buttons[0])).toBe("China Flex 240 GSM");
+  });
+
+  it("sign board qualities: one rate button and the full features list with ticks", () => {
+    const features = [
+      { id: "f1", label: "Waterproof", isVisible: true, sortOrder: 0 },
+      { id: "f2", label: "LED lights", isVisible: true, sortOrder: 1 },
+      { id: "f3", label: "Hidden feature", isVisible: false, sortOrder: 2 },
+    ];
+    const g = publicGroup("SIGN_BOARD", item({ name: "Premium Backlit", subtitle: "Premium", rateMinor: 60000, featureIds: ["f2"] }), features)!;
+    expect(g.buttons).toEqual([{ id: "i1", label: "Premium", rateMinor: 60000 }]);
+    expect(g.features).toEqual([
+      { label: "Waterproof", included: false },
+      { label: "LED lights", included: true },
+    ]);
+    expect(publicGroup("SIGN_BOARD", item({ rateMinor: 0 }), features)).toBeNull();
   });
 });

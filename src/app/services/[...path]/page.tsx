@@ -10,7 +10,7 @@ import { JsonLd } from "@/components/catalog/json-ld";
 import { ProductCard } from "@/components/product-card";
 import { QuoteButtons } from "@/components/services/quote-buttons";
 import { ServiceVisual } from "@/components/services/service-visual";
-import { RateSection } from "@/components/rates/rate-section";
+import { RateSections } from "@/components/rates/rate-section";
 import { getPublicRatePage } from "@/lib/rates/queries";
 import { formatRs } from "@/lib/rates/calculator";
 import { lowestRate } from "@/lib/rates/visibility";
@@ -104,7 +104,7 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
               {rates ? (
                 // Pages with rates: the lowest rate per sq ft set in Admin → Rates
                 <span>
-                  From <span className="font-bold">{formatRs(Math.min(...rates.items.map(lowestRate)))}</span> <span className="text-muted">per sq ft</span>
+                  From <span className="font-bold">{formatRs(lowestRate(rates.sections))}</span> <span className="text-muted">per sq ft</span>
                 </span>
               ) : (
                 <CategoryPrice category={node} />
@@ -122,7 +122,7 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
 
       <div className="mx-auto max-w-6xl space-y-12 px-4 py-12">
         {/* Rates per sq ft with the size calculator (only when this page has items with a rate) */}
-        {rates && <RateSection page={rates} path={serviceUrl(node.path)} />}
+        {rates && <RateSections page={rates} path={serviceUrl(node.path)} />}
 
         {node.children.length > 0 && (
           <section aria-labelledby="types-heading">
