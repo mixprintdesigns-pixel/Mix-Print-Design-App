@@ -10,6 +10,7 @@ const sections: { href: string; label: string; ready: boolean }[] = [
   { href: "/admin", label: "Dashboard", ready: true },
   { href: "/admin/products", label: "Products", ready: true },
   { href: "/admin/categories", label: "Categories & Services", ready: true },
+  { href: "/admin/rates", label: "Rates", ready: true },
   { href: "/admin/reviews", label: "Reviews", ready: true },
   { href: "/admin/about", label: "About page", ready: true },
   { href: "/admin/seo", label: "SEO", ready: true },

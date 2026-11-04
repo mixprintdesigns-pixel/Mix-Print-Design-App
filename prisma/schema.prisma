@@ -101,6 +101,7 @@ model Category {
   parent         Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
   children       Category[] @relation("CategoryTree")
   products       Product[]
+  ratePage       RatePage?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @default(now()) @updatedAt
 
@@ -115,38 +116,38 @@ enum ProductStatus {
 }
 
 model Product {
-  id                     String           @id @default(cuid())
-  sku                    String           @unique // unique product identifier, e.g. BC-STD-001
-  name                   String
-  slug                   String           @unique
-  summary                String? // short description
-  description            String // full description
-  categoryId             String
-  category               Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  basePriceMinor         Int // per-unit price when no quantity tier applies
-  minQuantity            Int              @default(1)
-  quantityStep           Int              @default(1)
-  turnaroundDays         Int              @default(3) // estimated production time, working days
-  youtubeUrl             String? // optional product video (normalised YouTube link), shown in the image gallery
-  youtubeVideoFirst      Boolean          @default(false) // true: the video is the main gallery item; false: after the first image
-  youtubeAddedAt         DateTime? // when the video link was set (used as the video's date for Google)
-  youtubeVideoPosition   String           @default("LAST") // FIRST (main item), AFTER_FIRST (after the first image) or LAST (after all images)
-  status                 ProductStatus    @default(DRAFT)
-  isAvailable            Boolean          @default(true) // can be ordered right now
-  isFeatured             Boolean          @default(false)
-  allowsDesignService    Boolean          @default(true)
-  seoTitle               String?
-  seoDescription         String?
-  affiliateCommissionBps Int? // overrides the affiliate program default; 1000 = 10%
+  id                       String           @id @default(cuid())
+  sku                      String           @unique // unique product identifier, e.g. BC-STD-001
+  name                     String
+  slug                     String           @unique
+  summary                  String? // short description
+  description              String // full description
+  categoryId               String
+  category                 Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  basePriceMinor           Int // per-unit price when no quantity tier applies
+  minQuantity              Int              @default(1)
+  quantityStep             Int              @default(1)
+  turnaroundDays           Int              @default(3) // estimated production time, working days
+  youtubeUrl               String? // optional product video (normalised YouTube link), shown in the image gallery
+  youtubeVideoFirst        Boolean          @default(false) // true: the video is the main gallery item; false: after the first image
+  youtubeAddedAt           DateTime? // when the video link was set (used as the video's date for Google)
+  youtubeVideoPosition     String           @default("LAST") // FIRST (main item), AFTER_FIRST (after the first image) or LAST (after all images)
+  status                   ProductStatus    @default(DRAFT)
+  isAvailable              Boolean          @default(true) // can be ordered right now
+  isFeatured               Boolean          @default(false)
+  allowsDesignService      Boolean          @default(true)
+  seoTitle                 String?
+  seoDescription           String?
+  affiliateCommissionBps   Int? // overrides the affiliate program default; 1000 = 10%
   affiliateCommissionMinor Int? // fixed affiliate commission in paisa per order of this product (overrides the %)
-  serviceCategoryId      String? // where the product appears on the Services page
-  serviceCategory        ServiceCategory? @relation(fields: [serviceCategoryId], references: [id], onDelete: SetNull)
-  serviceSubtypeId       String?
-  serviceSubtype         ServiceSubtype?  @relation(fields: [serviceSubtypeId], references: [id], onDelete: SetNull)
-  serviceQualityId       String?
-  serviceQuality         ServiceQuality?  @relation(fields: [serviceQualityId], references: [id], onDelete: SetNull)
-  createdAt              DateTime         @default(now())
-  updatedAt              DateTime         @updatedAt
+  serviceCategoryId        String? // where the product appears on the Services page
+  serviceCategory          ServiceCategory? @relation(fields: [serviceCategoryId], references: [id], onDelete: SetNull)
+  serviceSubtypeId         String?
+  serviceSubtype           ServiceSubtype?  @relation(fields: [serviceSubtypeId], references: [id], onDelete: SetNull)
+  serviceQualityId         String?
+  serviceQuality           ServiceQuality?  @relation(fields: [serviceQualityId], references: [id], onDelete: SetNull)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 
   images         ProductImage[]
   options        ProductOption[]
@@ -281,30 +282,30 @@ enum OrderStatus {
 }
 
 model Order {
-  id              String      @id @default(cuid())
-  number          String      @unique // human friendly, e.g. MP-260001
+  id              String       @id @default(cuid())
+  number          String       @unique // human friendly, e.g. MP-260001
   userId          String? // null for orders recorded by staff (e.g. WhatsApp orders)
-  user            User?       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user            User?        @relation(fields: [userId], references: [id], onDelete: Restrict)
   customerName    String? // for orders recorded by staff
   customerPhone   String?
   customerEmail   String?
-  source          String      @default("WEBSITE") // WEBSITE, WHATSAPP or CHAT
-  amountPaidMinor Int         @default(0) // advance and balance payments received
+  source          String       @default("WEBSITE") // WEBSITE, WHATSAPP or CHAT
+  amountPaidMinor Int          @default(0) // advance and balance payments received
   workPhotos      OrderPhoto[]
-  status          OrderStatus @default(PENDING_PAYMENT)
-  currency        String      @default("PKR")
+  status          OrderStatus  @default(PENDING_PAYMENT)
+  currency        String       @default("PKR")
   subtotalMinor   Int
-  shippingMinor   Int         @default(0)
-  discountMinor   Int         @default(0)
+  shippingMinor   Int          @default(0)
+  discountMinor   Int          @default(0)
   totalMinor      Int
   shippingAddress Json // snapshot of the address at checkout
   customerNotes   String?
   courier         String? // TCS, Leopards, M&P, PostEx…
   trackingNumber  String?
   affiliateId     String?
-  affiliate       Affiliate?  @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
-  placedAt        DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  affiliate       Affiliate?   @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+  placedAt        DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   items         OrderItem[]
   payments      Payment[]
@@ -334,7 +335,9 @@ model OrderItem {
   proofs         Proof[]
 }
 
-/** Pictures of the finished work, uploaded by staff at "Work Completed" and sent to the customer. */
+/**
+ * Pictures of the finished work, uploaded by staff at "Work Completed" and sent to the customer.
+ */
 model OrderPhoto {
   id         String   @id @default(cuid())
   orderId    String
@@ -957,4 +960,76 @@ model BlogPost {
 
   @@index([status, publishedAt])
   @@index([categoryId])
+}
+
+// ─── Rates: per-square-foot prices with a size calculator (Admin → Rates) ─────
+// A rate page is shown on one service page (e.g. Backlit Sign Board, Digital Printing). It lists items
+// (qualities or materials), each with its own rate per sq ft, or with GSM / series variants that each have a rate.
+// Items and variants with a rate of 0 are not shown on the website.
+
+enum RateVariantType {
+  NONE
+  GSM
+  SERIES
+}
+
+model RatePage {
+  id             String     @id @default(cuid())
+  categoryId     String?    @unique // the service page it appears on
+  category       Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  title          String // H1
+  intro          String?
+  seoTitle       String?
+  seoDescription String?
+  isVisible      Boolean    @default(true)
+  sortOrder      Int        @default(0)
+  items          RateItem[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model RateItem {
+  id          String          @id @default(cuid())
+  pageId      String
+  page        RatePage        @relation(fields: [pageId], references: [id], onDelete: Restrict)
+  section     String? // groups items on the page, e.g. "Flex" or "Stickers"
+  name        String // H2
+  subtitle    String? // e.g. Normal, Medium, Premium
+  description String? // rich text (Markdown: **bold**, - lists, ## headings)
+  imageUrl    String?
+  imageKey    String?
+  imageAlt    String?
+  rateMinor   Int             @default(0) // per sq ft, in paisa; used when the item has no variants
+  variantType RateVariantType @default(NONE)
+  isVisible   Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  variants    RateVariant[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([pageId, sortOrder])
+}
+
+model RateVariant {
+  id        String   @id @default(cuid())
+  itemId    String
+  item      RateItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  label     String // e.g. "300 GSM" or "2000 series"
+  rateMinor Int      @default(0) // per sq ft, in paisa
+  isVisible Boolean  @default(true)
+  sortOrder Int      @default(0)
+
+  @@unique([itemId, label])
+}
+
+/**
+ * One row (id "default"): design charges, minimum order and the GSM / series option lists.
+ */
+model RateSettings {
+  id                String   @id @default("default")
+  designChargeMinor Int      @default(100000) // Rs 1,000, added to every order from the rate pages
+  minOrderMinor     Int? // optional minimum printing cost
+  gsmOptions        Int[]    @default([200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400])
+  seriesOptions     String[] @default(["1000 series", "2000 series", "3000 series"])
+  updatedAt         DateTime @updatedAt
 }

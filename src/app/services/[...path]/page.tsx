@@ -10,6 +10,10 @@ import { JsonLd } from "@/components/catalog/json-ld";
 import { ProductCard } from "@/components/product-card";
 import { QuoteButtons } from "@/components/services/quote-buttons";
 import { ServiceVisual } from "@/components/services/service-visual";
+import { RateSection } from "@/components/rates/rate-section";
+import { getPublicRatePage } from "@/lib/rates/queries";
+import { formatRs } from "@/lib/rates/calculator";
+import { lowestRate } from "@/lib/rates/visibility";
 import { getCatalogPaths, getCategoryTree, listProducts, type CategoryNode } from "@/lib/catalog/queries";
 import { ancestry, categoryUrl, defaultCategoryTitle, findByPath, metaDescription, serviceUrl, siblings } from "@/lib/catalog/tree";
 import { absoluteUrl, seoMetadata } from "@/lib/seo";
@@ -32,9 +36,11 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const found = await findService(params);
   if (!found) return { title: "Page not found", robots: { index: false } };
   const { tree, node } = found;
+  // Pages with rates (Admin → Rates) can have their own SEO title and description.
+  const rates = await getPublicRatePage(node.id);
   return seoMetadata({
-    title: node.seoTitle || defaultCategoryTitle(node, ancestry(tree, node)),
-    description: node.seoDescription || metaDescription(node.description || node.content),
+    title: rates?.seoTitle || node.seoTitle || defaultCategoryTitle(node, ancestry(tree, node)),
+    description: rates?.seoDescription || node.seoDescription || metaDescription(node.description || node.content),
     path: serviceUrl(node.path),
     images: node.imageUrl ? [{ url: node.imageUrl, alt: node.imageAlt ?? node.name }] : undefined,
   });
@@ -78,7 +84,7 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
   const subject = chain.map((c) => c.name).join(" / ");
   // One level at a time: this page lists its direct sub-categories and the products assigned to it,
   // never anything deeper.
-  const products = await listProducts({ categoryId: node.id, directOnly: true });
+  const [products, rates] = await Promise.all([listProducts({ categoryId: node.id, directOnly: true }), getPublicRatePage(node.id)]);
   const parent = chain.at(-2);
   const related = siblings(tree, node).slice(0, 6);
 
@@ -92,10 +98,17 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
             <Link href={parent ? serviceUrl(parent.path) : "/services"} className="mt-2 inline-block text-sm font-semibold text-brand">
               ← Back to {parent ? parent.name : "all services"}
             </Link>
-            <h1 className="mt-3 text-4xl font-extrabold tracking-tight">{node.name}</h1>
+            <h1 className="mt-3 text-4xl font-extrabold tracking-tight">{rates?.title || node.name}</h1>
             {node.description && <p className="mt-3 text-lg text-muted">{node.description}</p>}
             <p className="mt-3">
-              <CategoryPrice category={node} />
+              {rates ? (
+                // Pages with rates: the lowest rate per sq ft set in Admin → Rates
+                <span>
+                  From <span className="font-bold">{formatRs(Math.min(...rates.items.map(lowestRate)))}</span> <span className="text-muted">per sq ft</span>
+                </span>
+              ) : (
+                <CategoryPrice category={node} />
+              )}
             </p>
             <div className="mt-5">
               <QuoteButtons subject={subject} />
@@ -108,6 +121,9 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
       </section>
 
       <div className="mx-auto max-w-6xl space-y-12 px-4 py-12">
+        {/* Rates per sq ft with the size calculator (only when this page has items with a rate) */}
+        {rates && <RateSection page={rates} path={serviceUrl(node.path)} />}
+
         {node.children.length > 0 && (
           <section aria-labelledby="types-heading">
             <h2 id="types-heading" className="text-2xl font-bold">
