@@ -7,6 +7,7 @@ import { JsonLd } from "@/components/catalog/json-ld";
 import { QuoteButtons } from "@/components/services/quote-buttons";
 import { AppHomeHeader, AppSteps } from "@/components/app/app-home-header";
 import { getCategoryTree, getFeaturedProducts } from "@/lib/catalog/queries";
+import { getPriceHints } from "@/lib/rates/queries";
 import { categoryUrl, serviceUrl } from "@/lib/catalog/tree";
 import { pageMetadata } from "@/lib/content/seo-pages";
 import { getSiteSettings, whatsappUrl } from "@/lib/content/site-settings";
@@ -47,12 +48,13 @@ function reviewsJsonLd(reviews: Awaited<ReturnType<typeof getPublishedReviews>>)
 
 // Catalog data is cached ("use cache"), so this whole page prerenders into the static shell.
 export default async function HomePage() {
-  const [services, featured, affiliate, reviews, settings] = await Promise.all([
+  const [services, featured, affiliate, reviews, settings, hints] = await Promise.all([
     getCategoryTree(),
     getFeaturedProducts(),
     getPublicProgramTerms(),
     getPublishedReviews(),
     getSiteSettings(),
+    getPriceHints(),
   ]);
   // The tagline is editable in admin; its last two words are highlighted.
   const taglineWords = settings.tagline.split(" ");
@@ -122,7 +124,7 @@ export default async function HomePage() {
           <div className="app-list mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {services.map((s, i) => (
               <div key={s.id} className="flex flex-col gap-2">
-                <CategoryCard category={s} href={serviceUrl(s.path)} index={i} />
+                <CategoryCard category={s} href={serviceUrl(s.path)} index={i} priceHint={hints[s.id]} />
                 {/* The installed app has one action row inside the card instead */}
                 <div className="app:hidden!">
                   <QuoteButtons subject={s.name} compact />

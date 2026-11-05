@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppCardActions } from "@/components/app/app-card-actions";
 import { ServiceVisual } from "@/components/services/service-visual";
 import type { CategoryNode } from "@/lib/catalog/tree";
+import type { PriceHint } from "@/lib/rates/queries";
 import { CategoryPrice } from "./category-price";
 
 /** Compact app-mode shape shared with the Services page: a square picture on the left, text on the right. */
@@ -12,7 +13,20 @@ export const APP_ROW_VISUAL = "app:aspect-square app:rounded-xl";
  * A category (main service, category or sub-category) as a card linking one level deeper.
  * In the installed app it is a compact row (square picture left, text right) with one "View" + WhatsApp action row.
  */
-export function CategoryCard({ category, href, index = 0, headingLevel = 3 }: { category: CategoryNode; href: string; index?: number; headingLevel?: 2 | 3 }) {
+export function CategoryCard({
+  category,
+  href,
+  index = 0,
+  headingLevel = 3,
+  priceHint,
+}: {
+  category: CategoryNode;
+  href: string;
+  index?: number;
+  headingLevel?: 2 | 3;
+  /** Its price (rates per sq ft, or its cheapest product): see CategoryPrice. */
+  priceHint?: PriceHint;
+}) {
   const Heading = `h${headingLevel}` as const;
   return (
     <article className={`card group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lg ${APP_ROW_CARD}`} data-testid="category-card">
@@ -27,7 +41,7 @@ export function CategoryCard({ category, href, index = 0, headingLevel = 3 }: { 
         </Heading>
         {category.description && <p className="app-card-text mt-1 line-clamp-3 text-sm text-muted app:line-clamp-2">{category.description}</p>}
         <p className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3 text-sm">
-          <CategoryPrice category={category} />
+          <CategoryPrice category={category} hint={priceHint} />
           <span className="text-muted">
             {category.children.length > 0
               ? `${category.children.length} ${category.children.length === 1 ? "type" : "types"}`
@@ -36,6 +50,12 @@ export function CategoryCard({ category, href, index = 0, headingLevel = 3 }: { 
                 : ""}
           </span>
         </p>
+        {/* Per-sq-ft items: straight to the calculator on their page */}
+        {priceHint?.kind === "sqft" && (
+          <Link href={`${href}#rates`} className="btn-secondary mt-3 w-full py-2" data-testid="check-price">
+            Check price<span className="sr-only"> of {category.name}</span>
+          </Link>
+        )}
       </div>
       <AppCardActions href={href} subject={category.name} className="app:col-span-2 app:px-3 app:pb-3" />
     </article>

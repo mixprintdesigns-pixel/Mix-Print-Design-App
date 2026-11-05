@@ -6,6 +6,7 @@ import { APP_ROW_CARD, APP_ROW_VISUAL } from "@/components/catalog/category-card
 import { QuoteButtons } from "@/components/services/quote-buttons";
 import { ServiceVisual } from "@/components/services/service-visual";
 import { getCategoryTree } from "@/lib/catalog/queries";
+import { getPriceHints } from "@/lib/rates/queries";
 import { serviceUrl } from "@/lib/catalog/tree";
 import { pageMetadata } from "@/lib/content/seo-pages";
 
@@ -14,7 +15,7 @@ export const generateMetadata = () => pageMetadata("services");
 // One level at a time: this page lists only the main services (in the original Services page design).
 // Each service page lists its own categories, each category its sub-categories, and the last level its products.
 export default async function ServicesPage() {
-  const services = await getCategoryTree();
+  const [services, hints] = await Promise.all([getCategoryTree(), getPriceHints()]);
   return (
     <>
       <section className="border-b border-border bg-surface">
@@ -57,7 +58,7 @@ export default async function ServicesPage() {
               </h2>
               {service.description && <p className="app-card-text mt-2 text-muted app:mt-1 app:line-clamp-2">{service.description}</p>}
               <p className="mt-3 text-sm app:mt-2">
-                <CategoryPrice category={service} />
+                <CategoryPrice category={service} hint={hints[service.id]} />
               </p>
               {/* The installed app shows one action row instead (below) */}
               <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5 app:hidden!">

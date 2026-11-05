@@ -13,6 +13,8 @@ import { ProductCard } from "@/components/product-card";
 import { ProductConfigurator } from "@/components/product-configurator";
 import { ProductGallery } from "@/components/product-gallery";
 import { QuoteButtons } from "@/components/services/quote-buttons";
+import { RateSections } from "@/components/rates/rate-section";
+import { getPriceHints, getRateContent } from "@/lib/rates/queries";
 import {
   getCatalogPaths,
   getCategoryTree,
@@ -89,7 +91,7 @@ function crumbsFor(tree: CategoryNode[], node: CategoryNode) {
   return [{ name: "Products", href: "/products" }, ...ancestry(tree, node).map((c) => ({ name: c.name, href: categoryUrl(c.path) }))];
 }
 
-function CategoryView({
+async function CategoryView({
   node,
   tree,
   searchParams,
@@ -98,6 +100,8 @@ function CategoryView({
   tree: CategoryNode[];
   searchParams: PageProps<"/products/[...path]">["searchParams"];
 }) {
+  // Flex, stickers and sign boards: their rate sections and calculator, as on the Services pages
+  const [rates, hints] = await Promise.all([getRateContent(node, tree), getPriceHints()]);
   const chain = ancestry(tree, node);
   const subject = chain.map((c) => c.name).join(" / ");
   const related = siblings(tree, node).slice(0, 6);
@@ -110,7 +114,7 @@ function CategoryView({
           <h1 className="text-3xl font-bold">{node.name}</h1>
           {node.description && <p className="mt-1 max-w-3xl text-muted">{node.description}</p>}
           <p className="mt-2 text-sm">
-            <CategoryPrice category={node} /> ·{" "}
+            <CategoryPrice category={node} hint={hints[node.id]} /> ·{" "}
             <Link href={serviceUrl(node.path)} className="font-semibold text-brand">
               See {node.name} service details
             </Link>
@@ -118,6 +122,12 @@ function CategoryView({
         </div>
         <QuoteButtons subject={subject} />
       </div>
+
+      {rates && (
+        <div className="mt-8">
+          <RateSections content={rates} path={categoryUrl(node.path)} />
+        </div>
+      )}
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[16rem_1fr]">
         <aside className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto">
@@ -159,7 +169,7 @@ function CategoryView({
           </h2>
           <div className="app-list mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {related.map((c, i) => (
-              <CategoryCard key={c.id} category={c} href={categoryUrl(c.path)} index={i} />
+              <CategoryCard key={c.id} category={c} href={categoryUrl(c.path)} index={i} priceHint={hints[c.id]} />
             ))}
           </div>
         </section>
@@ -208,7 +218,8 @@ function videoJsonLd(product: ProductDetail, videoId: string) {
 }
 
 async function ProductView({ product, category, tree, canonical }: { product: ProductDetail; category: CategoryNode; tree: CategoryNode[]; canonical: string }) {
-  const related = await getRelatedProducts(product.id, category.id);
+  // Flex, stickers and sign boards: the rate sections with this product's own rate pre-selected
+  const [related, rates] = await Promise.all([getRelatedProducts(product.id, category.id), getRateContent(category, tree, product.name)]);
   const video = parseYouTubeUrl(product.youtubeUrl);
   const relatedCategories = [...category.children, ...siblings(tree, category)].slice(0, 6);
 
@@ -246,6 +257,12 @@ async function ProductView({ product, category, tree, canonical }: { product: Pr
           )}
         </div>
       </div>
+
+      {rates && (
+        <section className="mt-12" aria-label="Price per sq ft">
+          <RateSections content={rates} path={canonical} withJsonLd={false} />
+        </section>
+      )}
 
       <section className="mt-12 grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">

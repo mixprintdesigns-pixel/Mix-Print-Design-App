@@ -1,11 +1,14 @@
-import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import sharp from "sharp";
 
-// Rate sections: the owner builds sections, buttons, rates and feature ticks in Admin; the service page shows the
-// blue title bar, the rate buttons and the calculator. Clicking a rate fills the Rate field, CHECK shows the
-// total, and Order now saves the order before WhatsApp. Each test cleans up the sections it made.
+// Rates & calculator, set in Admin → Categories & Services → All settings (one page, one Save), shown on every
+// related page (Services, sub-categories, Products), with per-sq-ft prices on cards and the 3D Wallpaper gallery.
+// Each test removes what it adds.
 
-const BACKLIT = "/services/board-maker/backlit-sign-board";
 const DIGITAL = "/services/digital-printing";
+const FLEX_PRINTING = `${DIGITAL}/flex-printing`;
+const CHINA = `${FLEX_PRINTING}/china-flex`;
+const WALLPAPER = `${DIGITAL}/3d-wallpaper`;
 
 async function signInAsAdmin(page: Page) {
   await page.goto("/login");
@@ -15,64 +18,50 @@ async function signInAsAdmin(page: Page) {
   await expect(page).toHaveURL(/\/account$/);
 }
 
-async function stubWhatsApp(context: BrowserContext) {
-  await context.route(/^https:\/\/wa\.me\//, (route) => route.fulfill({ status: 200, contentType: "text/html", body: "WhatsApp" }));
+async function allSettings(page: Page, name: string) {
+  await page.goto("/admin/categories");
+  await page.getByRole("link", { name: `All settings of ${name}`, exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 }
 
-/** Opens the rate page of a service page in Admin, adding it the first time. */
-async function openRatePage(page: Page, serviceName: string, optionLabel = serviceName) {
-  await page.goto("/admin/rates");
-  await expect(page.getByRole("button", { name: "Add rate page" })).toBeVisible();
-  const row = page.getByTestId("rate-page-row").filter({ has: page.getByRole("link", { name: serviceName, exact: true }) });
-  if ((await row.count()) > 0) await row.getByRole("link", { name: "Edit" }).click();
-  else {
-    await page.getByLabel("Existing service page").selectOption({ label: optionLabel });
-    await page.getByRole("button", { name: "Add rate page" }).click();
+async function save(page: Page) {
+  await page.getByTestId("save-all").click();
+  await expect(page.getByRole("status").filter({ hasText: "All settings saved." })).toBeVisible();
+}
+
+const sectionEditor = (page: Page, title: string) => page.getByTestId("full-section").filter({ has: page.locator("p", { hasText: title }) });
+
+/** Adds a Flex/Sticker section with rows of buttons, all in the editor (saved by the caller). */
+async function addSection(page: Page, kind: "Flex" | "Sticker", title: string, rows: { name: string; buttons: [string, string, string?][] }[], showOn: string[] = []) {
+  await page.getByRole("button", { name: `+ ${kind} section` }).click();
+  const section = page.getByTestId("full-section").last();
+  await section.getByLabel("Section title").fill(title);
+  for (const row of rows) {
+    await section.getByRole("button", { name: kind === "Flex" ? "+ Add a button row" : "+ Add a sticker type" }).click();
+    const group = section.getByTestId("full-group").last();
+    await group.getByRole("textbox").first().fill(row.name);
+    for (const [i, [label, rate, rule]] of row.buttons.entries()) {
+      await group.getByRole("button", { name: `+ Add a button to ${row.name}` }).click();
+      await group.getByLabel(`${row.name} button ${i + 1} text`).fill(label);
+      await group.getByLabel(`${row.name} button ${i + 1} rate`).fill(rate);
+      if (rule) await group.getByLabel(`${row.name} button ${i + 1} pricing rule`).selectOption(rule);
+    }
   }
-  await expect(page.getByRole("heading", { name: "Add a section" })).toBeVisible();
-}
-
-async function addSection(page: Page, title: string, rule: "FLEX" | "STICKER" | "SIGN_BOARD"): Promise<Locator> {
-  const add = page.locator("form", { has: page.getByRole("button", { name: "Add section" }) });
-  await add.getByLabel("Section title").fill(title);
-  await add.getByLabel("Pricing rule").selectOption(rule);
-  await add.getByRole("button", { name: "Add section" }).click();
-  const section = page.getByTestId("rate-section-editor").filter({ hasText: title });
-  await expect(section).toHaveCount(1);
+  if (showOn.length) {
+    await section.getByText(/Also show this section on/).click();
+    for (const label of showOn) await section.getByLabel(label, { exact: true }).check();
+  }
   return section;
 }
 
-/** Adds a row / sticker type / quality to a section and opens it. */
-async function addGroup(section: Locator, addLabel: string, name: string, buttonText?: string): Promise<Locator> {
-  await section.getByLabel(addLabel, { exact: true }).fill(name);
-  if (buttonText) await section.getByLabel("Button text", { exact: true }).fill(buttonText);
-  await section.getByRole("button", { name: addLabel }).click();
-  const group = section.getByTestId("rate-group-editor").filter({ hasText: name });
-  await expect(group).toHaveCount(1);
-  await group.locator("summary").click();
-  return group;
-}
-
-/** Fills the button table and saves; waits until the row is live on the website. */
-async function setButtons(group: Locator, rows: [string, string][]) {
-  for (let i = 0; i < rows.length; i++) {
-    if (i > 0) await group.getByRole("button", { name: "+ Add a button" }).click();
-    await group.getByLabel(`Button ${i + 1} text`).fill(rows[i][0]);
-    await group.getByLabel(`Button ${i + 1} rate`).fill(rows[i][1]);
-  }
-  await group.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(group.getByText("On the website")).toBeVisible();
-}
-
-async function deleteSection(page: Page, rateService: string, optionLabel: string, title: string) {
-  await openRatePage(page, rateService, optionLabel);
-  const section = page.getByTestId("rate-section-editor").filter({ hasText: title });
+async function deleteSection(page: Page, category: string, title: string) {
+  await allSettings(page, category);
+  await sectionEditor(page, title).getByLabel("Delete section").check();
   page.once("dialog", (d) => d.accept());
-  await section.getByRole("button", { name: "Delete this section" }).click();
-  await expect(section).toHaveCount(0);
+  await save(page);
+  await expect(sectionEditor(page, title)).toHaveCount(0);
 }
 
-/** Enters a size in feet + inches in a calculator. */
 async function enterSize(calc: Locator, w: [string, string], h: [string, string]) {
   await calc.getByLabel("Width (ft)").fill(w[0]);
   await calc.getByLabel("Width (in)").fill(w[1]);
@@ -80,154 +69,197 @@ async function enterSize(calc: Locator, w: [string, string], h: [string, string]
   await calc.getByLabel("Height (in)").fill(h[1]);
 }
 
-test("flex and stickers: click a rate, enter the size, CHECK, Order now; Admin edits and deletes", async ({ page, context, isMobile }) => {
-  test.skip(isMobile, "The phone test below covers phones and the app");
+test.describe.configure({ mode: "serial" });
+
+test("Part 1: adding a button keeps every other rate (Flex and Stickers), one Save for the whole page", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Admin editing runs on desktop");
   const run = Date.now().toString(36);
-  await stubWhatsApp(context);
+  const flexTitle = `E2E Flex ${run} GSM & Rate per sq ft (Rs)`;
+  const stickerTitle = `E2E Sticker ${run} Series & Rate per sq ft (Rs)`;
   await signInAsAdmin(page);
+  await allSettings(page, "Digital Printing");
+  await addSection(page, "Flex", flexTitle, [
+    { name: "Flex", buttons: [["240 GSM", "45"], ["280 GSM", "55"]] },
+    { name: "Most Famous Flex Names", buttons: [["China Flex 240 GSM", "45"], ["Reflective Flex 400 GSM", "90", "STICKER"]] },
+  ], ["— Flex Printing"]);
+  await addSection(page, "Sticker", stickerTitle, [{ name: "Vinyl", buttons: [["1000 Series", "30"], ["2000 Series", "35"]] }]);
+  await save(page);
 
-  // Admin: a Flex section (GSM row + Most Famous Flex Names) and a Sticker section
-  await openRatePage(page, "Digital Printing");
-  const flex = await addSection(page, `E2E Flex ${run} GSM & Rate per sq ft (Rs)`, "FLEX");
-  await setButtons(await addGroup(flex, "Add a button row", `GSM row ${run}`), [["240 GSM", "45"], ["280 GSM", "55"]]);
-  await setButtons(await addGroup(flex, "Add a button row", "Most Famous Flex Names"), [["China Flex 240 GSM", "45"], ["Korean Star 400 GSM", "85"]]);
-  const sticker = await addSection(page, `E2E Sticker ${run} Series & Rate per sq ft (Rs)`, "STICKER");
-  await setButtons(await addGroup(sticker, "Add a sticker type", "Vinyl"), [["1000 Series", "30"], ["2000 Series", "35"]]);
-  await setButtons(await addGroup(sticker, "Add a sticker type", "One Way Vision"), [["1000 Series", "40"]]);
+  // Add one new button in each section, save, reload: all the old rates are still there
+  await page.reload();
+  const famous = sectionEditor(page, flexTitle).getByTestId("full-group").nth(1);
+  await famous.getByRole("button", { name: "+ Add a button to Most Famous Flex Names" }).click();
+  await famous.getByLabel("Most Famous Flex Names button 3 text").fill("Star Flex 320 GSM");
+  await famous.getByLabel("Most Famous Flex Names button 3 rate").fill("65");
+  const vinyl = sectionEditor(page, stickerTitle).getByTestId("full-group").first();
+  await vinyl.getByRole("button", { name: "+ Add a button to Vinyl" }).click();
+  await vinyl.getByLabel("Vinyl button 3 text").fill("3000 Series");
+  await vinyl.getByLabel("Vinyl button 3 rate").fill("40");
+  await save(page);
+  await page.reload();
+  const flexRows = sectionEditor(page, flexTitle).getByTestId("full-group");
+  await expect(flexRows.nth(0).getByLabel("Flex button 1 rate")).toHaveValue("45");
+  await expect(flexRows.nth(0).getByLabel("Flex button 2 rate")).toHaveValue("55");
+  await expect(flexRows.nth(1).getByLabel("Most Famous Flex Names button 1 rate")).toHaveValue("45");
+  await expect(flexRows.nth(1).getByLabel("Most Famous Flex Names button 2 rate")).toHaveValue("90");
+  await expect(flexRows.nth(1).getByLabel("Most Famous Flex Names button 3 rate")).toHaveValue("65");
+  const stickerRow = sectionEditor(page, stickerTitle).getByTestId("full-group").first();
+  for (const [i, rate] of ["30", "35", "40"].entries()) await expect(stickerRow.getByLabel(`Vinyl button ${i + 1} rate`)).toHaveValue(rate);
 
-  // Website: blue bars and rate buttons ("240 GSM" on top, "45/-" below)
-  await page.goto(DIGITAL);
-  const flexSection = page.getByTestId("rate-section").filter({ has: page.getByRole("heading", { name: `E2E Flex ${run} GSM & Rate per sq ft (Rs)` }) });
-  await expect(flexSection.getByRole("heading", { level: 3, name: "Most Famous Flex Names" })).toBeVisible();
-  const b280 = flexSection.getByRole("button", { name: "280 GSM 55/-" });
-  await expect(b280).toBeVisible();
-  const calc = flexSection.getByTestId("rate-calculator");
-  await expect(calc.getByText("Enter your size – check your price")).toBeVisible();
-  await expect(calc.getByTestId("calc-design")).toHaveValue("1,000/-");
-  await expect(calc.getByTestId("calc-design")).toHaveAttribute("readonly", "");
-  await expect(calc.getByTestId("calc-rate")).toHaveAttribute("readonly", "");
-
-  // Clicking a rate fills the Rate field and highlights the button
-  await b280.click();
-  await expect(b280).toHaveAttribute("aria-pressed", "true");
-  await expect(calc.getByTestId("calc-rate")).toHaveValue("55/-");
-  // Rule A: 6 ft 2 in × 3 ft → 7 × 3 = 21 sq ft × 55 = 1,155 + 1,000 = Rs 2,155
+  // The website: Digital Printing, Flex Printing (shared section), China Flex (its rate pre-selected)
+  await page.goto(FLEX_PRINTING);
+  const flex = page.getByTestId("rate-section").filter({ has: page.getByRole("heading", { name: flexTitle }) });
+  await expect(flex).toBeVisible();
+  // China Flex card: "From Rs 45 per sq ft" and "Check price"
+  const chinaCard = page.getByTestId("category-card").filter({ hasText: "China Flex" }).first();
+  await expect(chinaCard.getByTestId("price-hint")).toHaveText(/From Rs 45 per sq ft/);
+  await chinaCard.getByTestId("check-price").click();
+  await expect(page).toHaveURL(new RegExp(`${CHINA}#rates$`));
+  const onChina = page.getByTestId("rate-section").filter({ has: page.getByRole("heading", { name: flexTitle }) });
+  await expect(onChina.getByRole("button", { name: "China Flex 240 GSM 45/-" })).toHaveAttribute("aria-pressed", "true");
+  const calc = onChina.getByTestId("rate-calculator");
+  await expect(calc.getByTestId("calc-rate")).toHaveValue("45/-");
   await enterSize(calc, ["6", "2"], ["3", ""]);
   await calc.getByRole("button", { name: "CHECK" }).click();
-  await expect(calc.getByTestId("calc-total")).toHaveText("Rs 2,155");
-  await expect(calc.getByTestId("calc-size")).toHaveText("6 ft 2 in × 3 ft");
-  await expect(calc.getByTestId("calc-billable")).toHaveText("7 ft × 3 ft");
   await expect(calc.getByTestId("calc-sqft")).toHaveText("21 sq ft");
-  // Another button: the old total clears until CHECK
-  const china = flexSection.getByRole("button", { name: "China Flex 240 GSM 45/-" });
-  await china.click();
-  await expect(b280).toHaveAttribute("aria-pressed", "false");
-  await expect(calc.getByTestId("calc-rate")).toHaveValue("45/-");
-  await expect(calc.getByTestId("calc-total")).toHaveText("—");
+
+  // Part 7: Reflective Flex uses the Sticker rule (3 × 6 ft → 4.5 × 6 = 27 sq ft), the note changes
+  await onChina.getByRole("button", { name: "Reflective Flex 400 GSM 90/-" }).click();
+  await expect(calc.getByTestId("calc-rule-note")).toHaveText(/4.5 ft/);
+  await enterSize(calc, ["3", ""], ["6", ""]);
   await calc.getByRole("button", { name: "CHECK" }).click();
-  await expect(calc.getByTestId("calc-total")).toHaveText("Rs 1,945");
+  await expect(calc.getByTestId("calc-sqft")).toHaveText("27 sq ft");
+  await onChina.getByRole("button", { name: "280 GSM 55/-" }).click();
+  await expect(calc.getByTestId("calc-rule-note")).toHaveText(/next full foot/);
+  await calc.getByRole("button", { name: "CHECK" }).click();
+  await expect(calc.getByTestId("calc-sqft")).toHaveText("18 sq ft");
 
-  // Stickers: one column per type; Rule B case 3: 9 ft 1 in × 6 ft 2 in → 13.5 × 6.1667 = 83.25 sq ft
-  const stickerSection = page.getByTestId("rate-section").filter({ has: page.getByRole("heading", { name: `E2E Sticker ${run} Series & Rate per sq ft (Rs)` }) });
-  await expect(stickerSection.getByRole("group", { name: "Vinyl" })).toBeVisible();
-  await expect(stickerSection.getByRole("group", { name: "One Way Vision" }).getByRole("button", { name: "1000 Series 40/-" })).toBeVisible();
-  const sCalc = stickerSection.getByTestId("rate-calculator");
-  await sCalc.getByRole("button", { name: "CHECK" }).click();
-  await expect(sCalc.getByRole("alert")).toHaveText(/Choose a rate first/);
-  await stickerSection.getByRole("group", { name: "Vinyl" }).getByRole("button", { name: "1000 Series 30/-" }).click();
-  await enterSize(sCalc, ["9", "1"], ["6", "2"]);
-  await sCalc.getByRole("button", { name: "CHECK" }).click();
-  await expect(sCalc.getByTestId("calc-billable")).toHaveText("13.5 ft × 6 ft 2 in");
-  await expect(sCalc.getByTestId("calc-sqft")).toHaveText("83.25 sq ft");
-  await expect(sCalc.getByTestId("calc-total")).toHaveText("Rs 3,498"); // 2,497.50 + 1,000, to the nearest rupee
-  // Other units: cm (152.4 × 91.44 cm = 5 × 3 ft → case 2: 4.5 × 5 = 22.5 sq ft × 30 = 675 + 1,000)
-  await sCalc.getByLabel("Unit").selectOption("cm");
-  await sCalc.getByLabel("Width (cm)").fill("152.4");
-  await sCalc.getByLabel("Height (cm)").fill("91.44");
-  await sCalc.getByRole("button", { name: "CHECK" }).click();
-  await expect(sCalc.getByTestId("calc-size")).toHaveText("152.4 cm × 91.44 cm");
-  await expect(sCalc.getByTestId("calc-total")).toHaveText("Rs 1,675");
+  // Products: the same sections on the product category page and on its products
+  await page.goto("/products/digital-printing/flex-printing");
+  await expect(page.getByRole("heading", { name: flexTitle })).toBeVisible();
+  const product = page.getByTestId("product-card").filter({ visible: true }).first();
+  if ((await product.count()) > 0) {
+    await product.click();
+    await expect(page.getByRole("heading", { name: flexTitle })).toBeVisible();
+  }
 
-  // Order now: saved first, then WhatsApp with everything
-  await sCalc.getByTestId("rate-order-now").click();
-  await sCalc.getByLabel("Your name").fill("Bilal Ahmed");
-  await sCalc.getByLabel("Mobile number").fill("0300 7654321");
-  await sCalc.getByLabel("City and address").fill("Johar Town, Lahore");
-  const [whatsapp] = await Promise.all([page.context().waitForEvent("page"), sCalc.getByRole("button", { name: "Confirm & continue on WhatsApp" }).click()]);
-  await expect(page).toHaveURL(/\/order\/confirmed\?n=MP-/);
+  // A per-unit service shows its product prices, and never the sq ft calculator
+  await page.goto("/services/offset-printing");
+  await expect(page.getByTestId("rate-sections")).toHaveCount(0);
+
+  await deleteSection(page, "Digital Printing", flexTitle);
+  await deleteSection(page, "Digital Printing", stickerTitle);
+  await page.goto(CHINA);
+  await expect(page.getByRole("heading", { name: flexTitle })).toHaveCount(0);
+});
+
+test("3D Wallpaper: fitting charges, gallery with watermarked previews, Choose this design", async ({ page, context, isMobile }) => {
+  test.skip(isMobile, "Admin editing runs on desktop");
+  const run = Date.now().toString(36);
+  await context.route(/^https:\/\/wa\.me\//, (route) => route.fulfill({ status: 200, contentType: "text/html", body: "WhatsApp" }));
+  await signInAsAdmin(page);
+
+  // Rates: Premium Rs 120, fitting Rs 30 per sq ft
+  await allSettings(page, "3D Wallpaper");
+  const section = page.getByTestId("full-section").filter({ has: page.locator("p", { hasText: "3D Wallpaper Types" }) });
+  await section.getByLabel("3D Wallpaper button 2 rate").fill("120");
+  await section.getByLabel("Fitting charges per sq ft").fill("30");
+  await save(page);
+
+  // Gallery: a design with a Google Drive link (Admin only)
+  await page.goto("/admin/wallpaper-gallery");
+  const add = page.locator("form", { has: page.getByRole("button", { name: "Add design" }) });
+  const png = await sharp({ create: { width: 2400, height: 1600, channels: 3, background: "#7c3aed" } }).png().toBuffer();
+  await add.getByLabel("Preview image (JPG, PNG or WebP)").setInputFiles({ name: "design.png", mimeType: "image/png", buffer: png });
+  await expect(add.getByText(/KB, ready to upload/)).toBeVisible();
+  await add.getByLabel("Title").fill(`Marble waves ${run}`);
+  await add.getByLabel("Category").selectOption({ label: "Living Room" });
+  await add.getByLabel(/Print file link/).fill(`https://drive.google.com/file/d/e2e-${run}`);
+  await add.getByRole("button", { name: "Add design" }).click();
+  await expect(add.getByRole("status")).toHaveText(/Design added \(WP-\d{3,}\)/);
+  const code = /WP-\d+/.exec((await add.getByRole("status").textContent())!)![0];
+  const adminDesign = page.getByTestId("admin-design").filter({ hasText: code });
+  await expect(adminDesign.getByRole("link", { name: "Open print file ↗" })).toHaveAttribute("href", `https://drive.google.com/file/d/e2e-${run}`);
+
+  // Website: the design, without the Drive link; Choose this design fills the code
+  await page.goto(WALLPAPER);
+  await expect(page.locator(`a[href*="e2e-${run}"]`)).toHaveCount(0);
+  const card = page.getByTestId("wallpaper-design").filter({ hasText: code });
+  await expect(card.getByRole("img")).toHaveAttribute("src", /webp|_next\/image/);
+  await card.getByRole("button", { name: `View ${code}` }).click();
+  await expect(page.getByRole("dialog", { name: new RegExp(code) })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Choose this design" }).click();
+  const rates = page.getByTestId("rate-section").filter({ has: page.getByRole("heading", { name: /3D Wallpaper Types/ }) });
+  const calc = rates.getByTestId("rate-calculator");
+  await expect(calc.getByTestId("calc-design-code")).toHaveValue(code);
+  await rates.getByRole("button", { name: "Premium 120/-" }).click();
+  await expect(calc.getByTestId("calc-fitting")).toHaveValue("30/-");
+  // 10 ft 3 in × 8 ft → 88 sq ft × (120 + 30) + 1,000 = Rs 14,200; without fitting Rs 11,560
+  await enterSize(calc, ["10", "3"], ["8", ""]);
+  await calc.getByRole("button", { name: "CHECK" }).click();
+  await expect(calc.getByTestId("calc-total")).toHaveText("Rs 14,200");
+  await expect(calc.getByTestId("calc-printing")).toHaveText("Rs 10,560");
+  await expect(calc.getByTestId("calc-fitting-cost")).toHaveText(/Rs 2,640/);
+  await calc.getByTestId("calc-include-fitting").uncheck();
+  await calc.getByRole("button", { name: "CHECK" }).click();
+  await expect(calc.getByTestId("calc-total")).toHaveText("Rs 11,560");
+  await calc.getByTestId("calc-include-fitting").check();
+  await calc.getByRole("button", { name: "CHECK" }).click();
+  await calc.getByTestId("rate-order-now").click();
+  await calc.getByLabel("Your name").fill("Bilal Ahmed");
+  await calc.getByLabel("Mobile number").fill("0300 7654321");
+  await calc.getByLabel("City and address").fill("DHA, Lahore");
+  const [whatsapp] = await Promise.all([page.context().waitForEvent("page"), calc.getByRole("button", { name: "Confirm & continue on WhatsApp" }).click()]);
   await whatsapp.waitForURL(/^https:\/\/wa\.me\//);
   const message = decodeURIComponent(whatsapp.url());
-  for (const text of ["*Vinyl 1000 Series*", "Option: 1000 Series", "Size: 152.4 cm × 91.44 cm", "Billable size: 5 ft × 4.5 ft", "Billable area: 22.5 sq ft", "Designing charges: PKR 1,000", "Total: PKR 1,675"]) {
-    expect(message).toContain(text);
-  }
+  for (const text of [`Design: ${code}`, "Fitting: PKR 2,640", "Total: PKR 14,200"]) expect(message).toContain(text);
 
-  // Admin deletes a button, then the sections
-  await openRatePage(page, "Digital Printing");
-  const row = page.getByTestId("rate-section-editor").filter({ hasText: `E2E Flex ${run}` }).getByTestId("rate-group-editor").filter({ hasText: "Most Famous Flex Names" });
-  await row.locator("summary").click();
-  await row.getByLabel("Delete button 2").check();
-  await row.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(row.getByLabel("Button 2 text")).toHaveCount(0);
-  await page.goto(DIGITAL);
-  await expect(page.getByRole("button", { name: "Korean Star 400 GSM 85/-" })).toHaveCount(0);
-  await deleteSection(page, "Digital Printing", "Digital Printing", `E2E Flex ${run}`);
-  await deleteSection(page, "Digital Printing", "Digital Printing", `E2E Sticker ${run}`);
-  await page.goto(DIGITAL);
-  await expect(page.getByText(`E2E Flex ${run}`)).toHaveCount(0);
+  // Gallery category page with its own address and title
+  await page.goto(`${WALLPAPER}/living-room`);
+  await expect(page.getByRole("heading", { level: 1, name: "Living Room 3D Wallpaper" })).toBeVisible();
+  await expect(page.getByTestId("wallpaper-design").filter({ hasText: code })).toBeVisible();
+
+  // Clean up
+  await page.goto("/admin/wallpaper-gallery");
+  const row = page.getByTestId("admin-design").filter({ hasText: code });
+  await row.getByText("Edit").click();
+  page.once("dialog", (d) => d.accept());
+  await row.getByRole("button", { name: "Delete design" }).click();
+  await expect(page.getByTestId("admin-design").filter({ hasText: code })).toHaveCount(0);
 });
 
-test("sign boards: qualities with one rate, feature ticks, description and their own calculator", async ({ page, isMobile }) => {
-  test.skip(isMobile, "The phone test below covers phones and the app");
-  const run = Date.now().toString(36);
+test("the old Rates admin opens Categories & Services, and the menu has no separate Rates item", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Desktop");
   await signInAsAdmin(page);
-  await openRatePage(page, "Backlit Sign Board", "— Backlit Sign Board");
-  const boards = await addSection(page, `E2E Boards ${run} Rate per sq ft (Rs)`, "SIGN_BOARD");
-  const premium = await addGroup(boards, "Add a quality", `Premium Board ${run}`, "Premium");
-  await premium.getByLabel("Rate per sq ft (Rs)").fill("60");
-  await premium.getByLabel("Waterproof").check();
-  await premium.locator('textarea[name="description"]').fill("Bright LED backlit board.");
-  await premium.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(premium.getByRole("status")).toHaveText("Saved.");
-
-  await page.goto(BACKLIT);
-  const quality = page.getByTestId("rate-quality").filter({ has: page.getByRole("heading", { name: `Premium Board ${run}` }) });
-  await expect(quality.getByRole("list", { name: /What .* includes/ }).getByRole("listitem").filter({ hasText: "Waterproof" })).toContainText("✓");
-  await expect(quality.getByText("LED lights (not included)")).toBeAttached();
-  await expect(quality.getByText("Bright LED backlit board.")).toBeVisible();
-  const button = quality.getByRole("button", { name: "Premium 60/-" });
-  await button.click();
-  await expect(quality.getByTestId("calc-rate")).toHaveValue("60/-");
-  // 10 ft 3 in × 5 ft → 11 × 5 = 55 sq ft × 60 = 3,300 + 1,000
-  await enterSize(quality, ["10", "3"], ["5", ""]);
-  await quality.getByRole("button", { name: "CHECK" }).click();
-  await expect(quality.getByTestId("calc-total")).toHaveText("Rs 4,300");
-
-  await deleteSection(page, "Backlit Sign Board", "— Backlit Sign Board", `E2E Boards ${run}`);
+  await page.goto("/admin/rates");
+  await expect(page).toHaveURL(/\/admin\/categories$/);
+  const menu = page.getByRole("navigation", { name: "Admin" });
+  await expect(menu.getByRole("link", { name: "Rates", exact: true })).toHaveCount(0);
+  await expect(menu.getByRole("link", { name: "3D Wallpaper Gallery" })).toBeVisible();
+  await expect(page.getByLabel(/Designing charges/)).toHaveValue("1000");
 });
 
-test("phone browser and app: buttons scroll sideways, big tap targets, CHECK works, nothing wider than the screen", async ({ page, isMobile }) => {
+test("phone browser and app: the shared Flex section on China Flex, CHECK, big buttons, no side scroll", async ({ page, isMobile }) => {
   test.skip(!isMobile, "Phone layout");
   const run = Date.now().toString(36);
+  const title = `E2E Phone ${run} GSM & Rate per sq ft (Rs)`;
   await signInAsAdmin(page);
-  await openRatePage(page, "Digital Printing");
-  const flex = await addSection(page, `E2E Phone ${run} GSM & Rate per sq ft (Rs)`, "FLEX");
-  await setButtons(await addGroup(flex, "Add a button row", `Phone row ${run}`), [["200 GSM", "40"], ["240 GSM", "45"], ["280 GSM", "55"], ["320 GSM", "65"], ["360 GSM", "75"], ["400 GSM", "85"]]);
+  await allSettings(page, "Digital Printing");
+  await addSection(page, "Flex", title, [{ name: "Most Famous Flex Names", buttons: [["China Flex 240 GSM", "45"], ["HD Star Flex 280 GSM", "55"], ["Star Flex 320 GSM", "65"], ["Korean Star 400 GSM", "85"]] }], ["— Flex Printing"]);
+  await save(page);
 
   for (const mode of ["?app=0", "?app=1"]) {
-    await page.goto(DIGITAL + mode);
-    const section = page.getByTestId("rate-section").filter({ has: page.getByRole("heading", { name: `E2E Phone ${run} GSM & Rate per sq ft (Rs)` }) });
-    const b400 = section.getByRole("button", { name: "400 GSM 85/-" });
-    expect((await b400.boundingBox())!.height).toBeGreaterThanOrEqual(mode === "?app=1" ? 60 : 47.5);
-    await b400.scrollIntoViewIfNeeded(); // the row scrolls sideways on phones
-    await b400.click();
+    await page.goto(CHINA + mode);
+    const section = page.getByTestId("rate-section").filter({ has: page.getByRole("heading", { name: title }) });
+    const china = section.getByRole("button", { name: "China Flex 240 GSM 45/-" });
+    await expect(china).toHaveAttribute("aria-pressed", "true");
+    expect((await china.boundingBox())!.height).toBeGreaterThanOrEqual(mode === "?app=1" ? 60 : 47.5);
     const calc = section.getByTestId("rate-calculator");
-    await expect(calc.getByTestId("calc-rate")).toHaveValue("85/-");
     await enterSize(calc, ["4", ""], ["3", ""]);
     await calc.getByRole("button", { name: "CHECK" }).click();
-    await expect(calc.getByTestId("calc-total")).toHaveText("Rs 2,020"); // 12 sq ft × 85 = 1,020 + 1,000
-    expect((await calc.getByRole("button", { name: "CHECK" }).boundingBox())!.height).toBeGreaterThanOrEqual(mode === "?app=1" ? 47.5 : 40);
+    await expect(calc.getByTestId("calc-total")).toHaveText("Rs 1,540"); // 12 × 45 + 1,000
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
-  await page.goto("/admin/rates?app=0");
-  await deleteSection(page, "Digital Printing", "Digital Printing", `E2E Phone ${run}`);
+  await page.goto("/admin/categories?app=0");
+  await deleteSection(page, "Digital Printing", title);
 });

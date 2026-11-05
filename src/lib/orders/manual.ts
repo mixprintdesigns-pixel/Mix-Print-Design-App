@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { calculateCommission } from "@/lib/affiliate/commission";
-import { approveCommission, createCommissionForOrder, getAffiliateSettings, onOrderStatusChanged } from "@/lib/affiliate/service";
+import { approveCommission, createCommissionForOrder, getAffiliateSettings, isFixedCommission, onOrderStatusChanged } from "@/lib/affiliate/service";
 import type { Prisma } from "@/generated/prisma/client";
 import { readSiteSettings, whatsappUrl } from "@/lib/content/site-settings";
 import { prisma } from "@/lib/db";
@@ -208,7 +208,8 @@ export async function setOrderTotal(orderId: string, totalMinor: number): Promis
       where: { id: orderId },
       data: { totalMinor, subtotalMinor: totalMinor, amountPaidMinor: Math.min(order.amountPaidMinor, totalMinor) },
     });
-    if (order.commission?.status === "PENDING") {
+    // Per-sq-ft commissions (rate calculator orders) stay as they are: the affiliate always gets the full amount.
+    if (order.commission?.status === "PENDING" && !isFixedCommission(order.commission.breakdown)) {
       const settings = await getAffiliateSettings();
       const result = calculateCommission(
         lines.map(({ item, line }) => ({
@@ -325,7 +326,7 @@ export async function listRecentOrders(take = 100) {
       placedAt: true,
       user: { select: { name: true } },
       affiliate: { select: { code: true, user: { select: { name: true } } } },
-      commission: { select: { amountMinor: true, status: true } },
+      commission: { select: { amountMinor: true, status: true, breakdown: true } },
       items: { select: { productName: true, quantity: true, optionsSummary: true } },
       shippingAddress: true,
       workPhotos: { orderBy: { createdAt: "asc" }, select: { id: true, url: true } },

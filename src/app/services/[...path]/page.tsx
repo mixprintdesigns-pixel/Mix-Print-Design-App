@@ -11,9 +11,12 @@ import { ProductCard } from "@/components/product-card";
 import { QuoteButtons } from "@/components/services/quote-buttons";
 import { ServiceVisual } from "@/components/services/service-visual";
 import { RateSections } from "@/components/rates/rate-section";
-import { getPublicRatePage } from "@/lib/rates/queries";
+import { getPriceHints, getRateContent, getRateIndex, rateFromMinor } from "@/lib/rates/queries";
 import { formatRs } from "@/lib/rates/calculator";
-import { lowestRate } from "@/lib/rates/visibility";
+import { CategoryGallery } from "@/components/catalog/category-gallery";
+import { getCategoryGallery } from "@/lib/catalog/gallery";
+import { WallpaperGallery } from "@/components/wallpaper/wallpaper-gallery";
+import { findWallpaperCategoryPage, getWallpaperGallery, isWallpaperService } from "@/lib/wallpaper/queries";
 import { getCatalogPaths, getCategoryTree, listProducts, type CategoryNode } from "@/lib/catalog/queries";
 import { ancestry, categoryUrl, defaultCategoryTitle, findByPath, metaDescription, serviceUrl, siblings } from "@/lib/catalog/tree";
 import { absoluteUrl, seoMetadata } from "@/lib/seo";
@@ -28,21 +31,33 @@ export async function generateStaticParams() {
 
 async function findService(params: Params) {
   const tree = await getCategoryTree();
-  const node = findByPath(tree, (await params).path);
-  return node ? { tree, node } : null;
+  const path = (await params).path;
+  const node = findByPath(tree, path);
+  if (node) return { tree, node, wallpaperCategory: null };
+  // 3D Wallpaper gallery categories: /services/digital-printing/3d-wallpaper/living-room
+  const wallpaper = await findWallpaperCategoryPage(tree, path);
+  return wallpaper ? { tree, node: wallpaper.service, wallpaperCategory: wallpaper.category } : null;
 }
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const found = await findService(params);
   if (!found) return { title: "Page not found", robots: { index: false } };
-  const { tree, node } = found;
-  // Pages with rates (Admin → Rates) can have their own SEO title and description.
-  const rates = await getPublicRatePage(node.id);
+  const { tree, node, wallpaperCategory } = found;
+  if (wallpaperCategory) {
+    return seoMetadata({
+      title: wallpaperCategory.seoTitle || `${wallpaperCategory.name} 3D Wallpaper Designs in Lahore | Mix Print Design`,
+      description: wallpaperCategory.seoDescription || metaDescription(wallpaperCategory.description) || `Browse ${wallpaperCategory.name.toLowerCase()} 3D wallpaper designs, choose one and get your price per sq ft with fitting in Lahore.`,
+      path: `${serviceUrl(node.path)}/${wallpaperCategory.slug}`,
+    });
+  }
+  // Pages with rates can have their own SEO title and description.
+  const rates = (await getRateIndex()).pages.find((p) => p.categoryId === node.id);
+  const image = node.ogImageUrl || node.imageUrl;
   return seoMetadata({
     title: rates?.seoTitle || node.seoTitle || defaultCategoryTitle(node, ancestry(tree, node)),
     description: rates?.seoDescription || node.seoDescription || metaDescription(node.description || node.content),
     path: serviceUrl(node.path),
-    images: node.imageUrl ? [{ url: node.imageUrl, alt: node.imageAlt ?? node.name }] : undefined,
+    images: image ? [{ url: image, alt: node.imageAlt ?? node.name }] : undefined,
   });
 }
 
@@ -59,7 +74,7 @@ export default function ServicePathPage({ params }: PageProps<"/services/[...pat
 async function ServicePath({ params }: { params: Params }) {
   const found = await findService(params);
   if (!found) notFound();
-  return <ServiceDetail tree={found.tree} node={found.node} />;
+  return <ServiceDetail tree={found.tree} node={found.node} wallpaperCategory={found.wallpaperCategory} />;
 }
 
 function serviceJsonLd(node: CategoryNode, chain: CategoryNode[]) {
@@ -79,12 +94,28 @@ function serviceJsonLd(node: CategoryNode, chain: CategoryNode[]) {
   };
 }
 
-async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: CategoryNode }) {
+async function ServiceDetail({
+  tree,
+  node,
+  wallpaperCategory,
+}: {
+  tree: CategoryNode[];
+  node: CategoryNode;
+  /** On a 3D Wallpaper gallery category page (e.g. Living Room): that category. */
+  wallpaperCategory: { slug: string; name: string; description: string | null } | null;
+}) {
   const chain = ancestry(tree, node);
   const subject = chain.map((c) => c.name).join(" / ");
   // One level at a time: this page lists its direct sub-categories and the products assigned to it,
   // never anything deeper.
-  const [products, rates] = await Promise.all([listProducts({ categoryId: node.id, directOnly: true }), getPublicRatePage(node.id)]);
+  const wallpaper = isWallpaperService(tree, node);
+  const [products, rates, hints, gallery, designs] = await Promise.all([
+    listProducts({ categoryId: node.id, directOnly: true }),
+    getRateContent(node, tree),
+    getPriceHints(),
+    getCategoryGallery(node.id),
+    wallpaper ? getWallpaperGallery() : Promise.resolve(null),
+  ]);
   const parent = chain.at(-2);
   const related = siblings(tree, node).slice(0, 6);
 
@@ -98,16 +129,16 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
             <Link href={parent ? serviceUrl(parent.path) : "/services"} className="mt-2 inline-block text-sm font-semibold text-brand">
               ← Back to {parent ? parent.name : "all services"}
             </Link>
-            <h1 className="mt-3 text-4xl font-extrabold tracking-tight">{rates?.title || node.name}</h1>
-            {node.description && <p className="mt-3 text-lg text-muted">{node.description}</p>}
+            <h1 className="mt-3 text-4xl font-extrabold tracking-tight">{wallpaperCategory ? `${wallpaperCategory.name} 3D Wallpaper` : rates?.page?.title || node.name}</h1>
+            {(wallpaperCategory?.description || node.description) && <p className="mt-3 text-lg text-muted">{wallpaperCategory?.description || node.description}</p>}
             <p className="mt-3">
-              {rates ? (
+              {rates && node.priceFromMinor == null ? (
                 // Pages with rates: the lowest rate per sq ft set in Admin → Rates
                 <span>
-                  From <span className="font-bold">{formatRs(lowestRate(rates.sections))}</span> <span className="text-muted">per sq ft</span>
+                  From <span className="font-bold">{formatRs(rateFromMinor(rates))}</span> <span className="text-muted">per sq ft</span>
                 </span>
               ) : (
-                <CategoryPrice category={node} />
+                <CategoryPrice category={node} hint={hints[node.id]} />
               )}
             </p>
             <div className="mt-5">
@@ -121,8 +152,12 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
       </section>
 
       <div className="mx-auto max-w-6xl space-y-12 px-4 py-12">
-        {/* Rates per sq ft with the size calculator (only when this page has items with a rate) */}
-        {rates && <RateSections page={rates} path={serviceUrl(node.path)} />}
+        {gallery.length > 0 && <CategoryGallery images={gallery} name={node.name} />}
+
+        {/* Rates per sq ft with the size calculator: this page's own sections and the ones it shares (e.g. Flex on China Flex) */}
+        {rates && <RateSections content={rates} path={serviceUrl(node.path)} />}
+
+        {designs && <WallpaperGallery gallery={designs} basePath={serviceUrl(node.path)} activeSlug={wallpaperCategory?.slug ?? null} />}
 
         {node.children.length > 0 && (
           <section aria-labelledby="types-heading">
@@ -131,7 +166,7 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
             </h2>
             <div className="app-list mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {node.children.map((c, i) => (
-                <CategoryCard key={c.id} category={c} href={serviceUrl(c.path)} index={i + 1} />
+                <CategoryCard key={c.id} category={c} href={serviceUrl(c.path)} index={i + 1} priceHint={hints[c.id]} />
               ))}
             </div>
           </section>
@@ -179,7 +214,7 @@ async function ServiceDetail({ tree, node }: { tree: CategoryNode[]; node: Categ
             </h2>
             <div className="app-list mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {related.map((c, i) => (
-                <CategoryCard key={c.id} category={c} href={serviceUrl(c.path)} index={i + 2} />
+                <CategoryCard key={c.id} category={c} href={serviceUrl(c.path)} index={i + 2} priceHint={hints[c.id]} />
               ))}
             </div>
           </section>

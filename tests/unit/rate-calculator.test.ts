@@ -211,3 +211,125 @@ describe("what the website shows", () => {
     expect(publicGroup("SIGN_BOARD", item({ rateMinor: 0 }), features)).toBeNull();
   });
 });
+
+// ─── Nov 2026 additions ──────────────────────────────────────────────────────
+import { parseBonusSlabs, rateCommission, ruleNote } from "@/lib/rates/calculator";
+import { buttonRule, matchScore, preselectFor, publicSection, type PublicSection } from "@/lib/rates/visibility";
+
+describe("3D Wallpaper: fitting charges", () => {
+  it("Total = billable sq ft × (wallpaper rate + fitting rate) + designing charges", () => {
+    // 10 ft 3 in × 8 ft → 11 × 8 = 88 sq ft × (Rs 120 + Rs 30) = 13,200 + 1,000
+    const r = quoteRate(ft([10, 3], [8, 0]), { rule: "FLEX", rateMinor: 12_000, designChargeMinor: 100_000, fittingRateMinor: 3_000 });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.quote).toMatchObject({ sqft: 88, printingMinor: 1_056_000, fittingMinor: 264_000, fittingRateMinor: 3_000, designChargeMinor: 100_000, totalMinor: 1_420_000 });
+  });
+
+  it("without fitting, only the wallpaper and the designing charges", () => {
+    const r = quoteRate(ft([10, 3], [8, 0]), { rule: "FLEX", rateMinor: 12_000, designChargeMinor: 100_000, fittingRateMinor: 0 });
+    expect(r.ok && r.quote).toMatchObject({ fittingMinor: 0, totalMinor: 1_156_000 });
+  });
+
+  it("the lines always add up to the total, rounded to the rupee", () => {
+    const r = quoteRate(ft([9, 1], [6, 2]), { rule: "STICKER", rateMinor: 4550, designChargeMinor: 100_000, fittingRateMinor: 1_525 });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.quote.printingMinor + r.quote.fittingMinor + r.quote.designChargeMinor).toBe(r.quote.totalMinor);
+    expect(r.quote.totalMinor % 100).toBe(0);
+  });
+});
+
+describe("affiliate commission per billable sq ft", () => {
+  it("billable sq ft × commission per sq ft (the same sq ft as the calculator)", () => {
+    const q = quote(ft([10, 3], [5, 0]), "FLEX"); // 55 sq ft
+    expect(rateCommission(q.sqft, 500, [])).toMatchObject({ sqftMinor: 27_500, bonusMinor: 0, totalMinor: 27_500 }); // Flex Rs 5
+    expect(rateCommission(quote(ft([9, 1], [6, 2]), "STICKER").sqft, 1000, []).totalMinor).toBe(83_250); // Stickers Rs 10 × 83.25
+    expect(rateCommission(21, 5000, []).totalMinor).toBe(105_000); // Sign board Rs 50 × 21
+  });
+
+  it("adds the highest big-order bonus reached, once", () => {
+    const slabs = parseBonusSlabs([{ minSqft: 1000, bonusMinor: 250_000 }, { minSqft: 500, bonusMinor: 100_000 }, { minSqft: "x" }]);
+    expect(slabs).toEqual([{ minSqft: 500, bonusMinor: 100_000 }, { minSqft: 1000, bonusMinor: 250_000 }]);
+    expect(rateCommission(499, 500, slabs)).toMatchObject({ bonusMinor: 0, totalMinor: 249_500 });
+    expect(rateCommission(500, 500, slabs)).toMatchObject({ bonusMinor: 100_000, totalMinor: 350_000 });
+    expect(rateCommission(1200, 500, slabs)).toMatchObject({ bonusMinor: 250_000, bonusSlab: { minSqft: 1000 } });
+    expect(parseBonusSlabs("nonsense")).toEqual([]);
+  });
+});
+
+const section = (over: Partial<PublicSection> = {}): PublicSection => ({ id: "s", title: "Flex", kind: "FLEX", groups: [], fittingRateMinor: null, askDesignCode: false, ...over });
+
+describe("a button can use its own pricing rule (Reflective Flex → Sticker rule)", () => {
+  const row = publicSection({
+    id: "s",
+    title: "Flex",
+    kind: "FLEX",
+    isVisible: true,
+    sortOrder: 0,
+    items: [item({ id: "famous", name: "Most Famous Flex Names", variants: [{ ...v("r", "Reflective Flex 400 GSM", 9000), rule: "STICKER" }, v("c", "China Flex 240 GSM", 4500)] })],
+  })!;
+  it("the button's rule, otherwise the section's", () => {
+    const [reflective, china] = row.groups[0].buttons;
+    expect(buttonRule(row, reflective)).toBe("STICKER");
+    expect(buttonRule(row, china)).toBe("FLEX");
+    // 3 ft × 6 ft: Sticker rule 4.5 × 6 = 27 sq ft, Flex rule 3 × 6 = 18 sq ft
+    expect(quote(ft([3, 0], [6, 0]), buttonRule(row, reflective)).sqft).toBe(27);
+    expect(quote(ft([3, 0], [6, 0]), buttonRule(row, china)).sqft).toBe(18);
+    expect(ruleNote("STICKER")).toMatch(/4.5 ft/);
+    expect(ruleNote("FLEX")).toMatch(/next full foot/);
+  });
+});
+
+describe("pre-selecting the button of a page", () => {
+  const flex = section({
+    groups: [
+      { id: "gsm", name: "Flex", subtitle: null, description: null, imageUrl: null, imageAlt: null, features: [], buttons: [{ id: "g240", label: "240 GSM", rateMinor: 4500 }] },
+      {
+        id: "famous",
+        name: "Most Famous Flex Names",
+        subtitle: null,
+        description: null,
+        imageUrl: null,
+        imageAlt: null,
+        features: [],
+        buttons: [
+          { id: "china", label: "China Flex 240 GSM", rateMinor: 4500 },
+          { id: "hd", label: "HD Star Flex 280 GSM", rateMinor: 5500 },
+          { id: "star", label: "Star Flex 320 GSM", rateMinor: 6500 },
+          { id: "korean", label: "Korean Star 400 GSM", rateMinor: 8500 },
+        ],
+      },
+    ],
+  });
+  it.each([
+    ["China Flex", "china"],
+    ["HD Star Flex", "hd"],
+    ["Star Flex", "star"],
+    ["Korean Star Flex", "korean"],
+  ])("%s → %s", (page, button) => {
+    expect(preselectFor(flex, page)?.buttonId).toBe(button);
+  });
+
+  it("nothing is pre-selected when no button clearly matches", () => {
+    expect(preselectFor(flex, "Panaflex")).toBeNull();
+    expect(preselectFor(flex, "Flex Printing")).toBeNull();
+  });
+
+  it("sign board child pages pick their quality", () => {
+    const boards = section({
+      kind: "SIGN_BOARD",
+      groups: ["Normal", "Medium", "Premium"].map((q, i) => ({
+        id: q,
+        name: `${["Economy", "Standard", "Premium"][i]} Backlit Sign Board`,
+        subtitle: q,
+        description: null,
+        imageUrl: null,
+        imageAlt: null,
+        features: [],
+        buttons: [{ id: q, label: q, rateMinor: 35000 + i * 10000 }],
+      })),
+    });
+    expect(preselectFor(boards, "Normal Backlit Sign Board")?.groupId).toBe("Normal");
+    expect(preselectFor(boards, "Medium Backlit Sign Board")?.groupId).toBe("Medium");
+    expect(preselectFor(boards, "Premium Backlit Sign Board")?.groupId).toBe("Premium");
+    expect(matchScore("Simple Acrylic Sign", "Normal", "Economy 3D Sign Board")).toBeLessThan(3);
+  });
+});

@@ -1,15 +1,31 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { buttonName, ruleFor, type PublicSection } from "@/lib/rates/visibility";
+import { buttonName, buttonRule, ruleFor, type PublicButton, type PublicGroup, type PublicSection } from "@/lib/rates/visibility";
 import type { RateSettingsData } from "@/lib/rates/queries";
 import { ButtonRow, CalculatorRow, RateBar, RateButton, type Selection } from "./rate-calculator";
 
 type Settings = RateSettingsData;
+type Preselect = { groupId: string; buttonId: string } | undefined;
+
+const select = (section: PublicSection, group: PublicGroup, b: PublicButton): Selection => ({
+  itemId: group.id,
+  variantId: b.id,
+  button: b,
+  name: buttonName(section, group, b),
+  rule: buttonRule(section, b),
+});
+
+/** The pre-selected button of a page (e.g. China Flex 240 GSM on the China Flex page), as a selection. */
+function initial(section: PublicSection, pre: Preselect): Selection {
+  const group = pre && section.groups.find((g) => g.id === pre.groupId);
+  const button = group?.buttons.find((b) => b.id === pre!.buttonId);
+  return group && button ? select(section, group, button) : null;
+}
 
 /** Flex / Backlit Flex: the title bar, the GSM buttons, further named rows (e.g. Most Famous Flex Names), one calculator. */
-export function FlexSection({ section, settings }: { section: PublicSection; settings: Settings }) {
-  const [selection, setSelection] = useState<Selection>(null);
+export function FlexSection({ section, settings, preselect }: { section: PublicSection; settings: Settings; preselect?: Preselect }) {
+  const [selection, setSelection] = useState<Selection>(() => initial(section, preselect));
   return (
     <section aria-labelledby={`sec-${section.id}`} className="space-y-3" data-testid="rate-section">
       <RateBar id={`sec-${section.id}`}>{section.title}</RateBar>
@@ -27,20 +43,27 @@ export function FlexSection({ section, settings }: { section: PublicSection; set
                 button={b}
                 wide={i > 0}
                 selected={selection?.button.id === b.id}
-                onSelect={() => setSelection({ itemId: group.id, variantId: b.id, button: b, name: buttonName(section, group, b) })}
+                onSelect={() => setSelection(select(section, group, b))}
               />
             ))}
           </ButtonRow>
         </div>
       ))}
-      <CalculatorRow rule={ruleFor(section.kind)} selection={selection} designChargeMinor={settings.designChargeMinor} minOrderMinor={settings.minOrderMinor} />
+      <CalculatorRow
+        rule={ruleFor(section.kind)}
+        selection={selection}
+        designChargeMinor={settings.designChargeMinor}
+        minOrderMinor={settings.minOrderMinor}
+        fittingRateMinor={section.fittingRateMinor}
+        askDesignCode={section.askDesignCode}
+      />
     </section>
   );
 }
 
 /** Stickers: the title bar, one column per sticker type with its series buttons, one calculator. */
-export function StickerSection({ section, settings }: { section: PublicSection; settings: Settings }) {
-  const [selection, setSelection] = useState<Selection>(null);
+export function StickerSection({ section, settings, preselect }: { section: PublicSection; settings: Settings; preselect?: Preselect }) {
+  const [selection, setSelection] = useState<Selection>(() => initial(section, preselect));
   return (
     <section aria-labelledby={`sec-${section.id}`} className="space-y-3" data-testid="rate-section">
       <RateBar id={`sec-${section.id}`}>{section.title}</RateBar>
@@ -54,24 +77,43 @@ export function StickerSection({ section, settings }: { section: PublicSection; 
                   key={b.id}
                   button={b}
                   selected={selection?.button.id === b.id}
-                  onSelect={() => setSelection({ itemId: group.id, variantId: b.id, button: b, name: buttonName(section, group, b) })}
+                  onSelect={() => setSelection(select(section, group, b))}
                 />
               ))}
             </div>
           </div>
         ))}
       </div>
-      <CalculatorRow rule={ruleFor(section.kind)} selection={selection} designChargeMinor={settings.designChargeMinor} minOrderMinor={settings.minOrderMinor} />
+      <CalculatorRow
+        rule={ruleFor(section.kind)}
+        selection={selection}
+        designChargeMinor={settings.designChargeMinor}
+        minOrderMinor={settings.minOrderMinor}
+        fittingRateMinor={section.fittingRateMinor}
+        askDesignCode={section.askDesignCode}
+      />
     </section>
   );
 }
 
 /** One sign board quality: its rate button, then (children) the features and description, then its own calculator. */
-export function SignBoardQuality({ section, groupId, settings, children }: { section: PublicSection; groupId: string; settings: Settings; children: ReactNode }) {
+export function SignBoardQuality({
+  section,
+  groupId,
+  settings,
+  preselected = false,
+  children,
+}: {
+  section: PublicSection;
+  groupId: string;
+  settings: Settings;
+  preselected?: boolean;
+  children: ReactNode;
+}) {
   const group = section.groups.find((g) => g.id === groupId)!;
   const button = group.buttons[0];
-  const [selected, setSelected] = useState(false);
-  const own: Selection = { itemId: group.id, variantId: null, button, name: group.name };
+  const [selected, setSelected] = useState(preselected);
+  const own: Selection = { itemId: group.id, variantId: null, button, name: group.name, rule: buttonRule(section, button) };
   const selection: Selection = selected ? own : null;
   return (
     <>

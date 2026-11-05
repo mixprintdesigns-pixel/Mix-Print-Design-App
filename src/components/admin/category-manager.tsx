@@ -132,13 +132,17 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
                       </button>
                     </td>
                     <td className="whitespace-nowrap p-3 text-right">
-                      <span className="ml-auto flex w-44 flex-wrap justify-end gap-x-3 gap-y-1">
+                      <span className="ml-auto flex w-56 flex-wrap justify-end gap-x-3 gap-y-1">
                         <button type="button" className="font-semibold text-brand" onClick={() => {
                             setEditingId(c.id);
                             showForm();
                           }}>
                           Edit
                         </button>
+                        {/* Everything on one page: images, rates & calculator, commission, features and SEO */}
+                        <a href={`/admin/categories/${c.id}`} className="font-semibold text-brand" data-testid="edit-all">
+                          All settings<span className="sr-only"> of {c.name}</span>
+                        </a>
                         <button
                           type="button"
                           className="text-brand"

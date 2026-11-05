@@ -11,6 +11,7 @@
 //   3. both sides > 4.5 ft: the Width is rounded up to the next multiple of 4.5 ft, the Height stays exact:
 //      14 × 6 → 18 × 6 = 108 · 9 × 6 → 54 · 9 ft 1 in × 6 ft 2 in → 13.5 × 6.1667 ≈ 83.25 sq ft
 // Total = billable sq ft × rate + designing charges, rounded to the nearest whole rupee.
+// 3D Wallpaper adds optional fitting: billable sq ft × (rate + fitting rate) + designing charges.
 
 export const SIZE_UNITS = ["ft-in", "in", "cm", "mm"] as const;
 export type SizeUnit = (typeof SIZE_UNITS)[number];
@@ -119,8 +120,11 @@ export type RateQuote = {
   /** Billable square feet for display, to 2 decimals. */
   sqftText: string;
   rateMinor: number;
-  /** Printing cost (sq ft × rate, or the minimum) in paisa; together with the design charge it makes the total. */
+  /** Printing cost (sq ft × rate, or the minimum) in paisa; with fitting and the design charge it makes the total. */
   printingMinor: number;
+  /** Fitting rate per sq ft and cost (3D Wallpaper), 0 when not included. */
+  fittingRateMinor: number;
+  fittingMinor: number;
   minimumApplied: boolean;
   designChargeMinor: number;
   /** Rounded to the nearest whole rupee. */
@@ -130,7 +134,7 @@ export type RateQuote = {
 /** The full price. Rates and charges are in paisa. */
 export function quoteRate(
   input: SizeInput,
-  pricing: { rule: PricingRule; rateMinor: number; designChargeMinor: number; minOrderMinor?: number | null },
+  pricing: { rule: PricingRule; rateMinor: number; designChargeMinor: number; minOrderMinor?: number | null; fittingRateMinor?: number | null },
 ): { ok: true; quote: RateQuote } | { ok: false; error: string } {
   const error = validateSize(input);
   if (error) return { ok: false, error };
@@ -141,8 +145,11 @@ export function quoteRate(
   const areaCost = sqft * pricing.rateMinor;
   const minimum = pricing.minOrderMinor && pricing.minOrderMinor > 0 ? pricing.minOrderMinor : 0;
   const designChargeMinor = Math.max(0, pricing.designChargeMinor);
-  const rawTotal = Math.max(areaCost, minimum) + designChargeMinor;
-  const totalMinor = Math.round(rawTotal / 100) * 100;
+  const fittingRateMinor = Math.max(0, pricing.fittingRateMinor ?? 0);
+  // Printing and fitting are each rounded to the rupee, so the lines on the order add up to the total.
+  const fittingMinor = Math.round((sqft * fittingRateMinor) / 100) * 100;
+  const printingMinor = Math.round((Math.max(areaCost, minimum) + designChargeMinor + fittingMinor) / 100) * 100 - designChargeMinor - fittingMinor;
+  const totalMinor = printingMinor + fittingMinor + designChargeMinor;
   return {
     ok: true,
     quote: {
@@ -155,12 +162,39 @@ export function quoteRate(
       sqft,
       sqftText: num(sqft),
       rateMinor: pricing.rateMinor,
-      printingMinor: totalMinor - designChargeMinor,
+      printingMinor,
+      fittingRateMinor: fittingMinor > 0 ? fittingRateMinor : 0,
+      fittingMinor,
       minimumApplied: minimum > areaCost,
       designChargeMinor,
       totalMinor,
     },
   };
+}
+
+/** The affiliate commission for a quote: billable sq ft × commission per sq ft, plus the highest bonus slab reached. */
+export function rateCommission(sqft: number, perSqftMinor: number, slabs: BonusSlab[]): { perSqftMinor: number; sqftMinor: number; bonusMinor: number; bonusSlab: BonusSlab | null; totalMinor: number } {
+  const sqftMinor = Math.round(sqft * Math.max(0, perSqftMinor));
+  const reached = slabs.filter((s) => s.minSqft > 0 && s.bonusMinor > 0 && sqft >= s.minSqft).sort((a, b) => b.minSqft - a.minSqft);
+  const bonusSlab = reached[0] ?? null;
+  const bonusMinor = bonusSlab?.bonusMinor ?? 0;
+  return { perSqftMinor: Math.max(0, perSqftMinor), sqftMinor, bonusMinor, bonusSlab, totalMinor: sqftMinor + bonusMinor };
+}
+
+export type BonusSlab = { minSqft: number; bonusMinor: number };
+
+/** Reads bonus slabs saved as JSON, ignoring anything malformed. */
+export function parseBonusSlabs(value: unknown): BonusSlab[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((s) => ({ minSqft: Number((s as BonusSlab)?.minSqft), bonusMinor: Math.round(Number((s as BonusSlab)?.bonusMinor)) }))
+    .filter((s) => Number.isFinite(s.minSqft) && s.minSqft > 0 && Number.isFinite(s.bonusMinor) && s.bonusMinor > 0)
+    .sort((a, b) => a.minSqft - b.minSqft);
+}
+
+/** The note under the calculator for a pricing rule. */
+export function ruleNote(rule: PricingRule): string {
+  return rule === "STICKER" ? "Sticker rule: priced on our 4.5 ft wide media roll." : "Each side is charged to the next full foot.";
 }
 
 /** Rupees as shown on the rate pages: 4500 paisa → "Rs 45", 4550 → "Rs 45.50", 1250000 → "Rs 12,500". */

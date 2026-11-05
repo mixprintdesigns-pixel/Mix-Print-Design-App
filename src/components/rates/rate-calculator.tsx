@@ -1,17 +1,20 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { placeRateOrderAction } from "@/app/order/actions";
-import { formatRateTag, formatRs, quoteRate, SIZE_UNITS, UNIT_LABELS, type PricingRule, type RateQuote, type SizeUnit } from "@/lib/rates/calculator";
+import { formatRateTag, formatRs, quoteRate, ruleNote, SIZE_UNITS, UNIT_LABELS, type PricingRule, type RateQuote, type SizeUnit } from "@/lib/rates/calculator";
 import type { PublicButton } from "@/lib/rates/visibility";
 
 // The rate buttons and the calculator row, the same in every rate section. Clicking a rate button fills the
 // Rate field (the customer cannot type a rate); Designing Charges are fixed; CHECK shows the total and a breakdown;
 // Order now saves the order (with the affiliate from the referral cookie) and opens WhatsApp.
 
-/** The selected rate: which group (item) and button (variant; for sign boards the item itself). */
-export type Selection = { itemId: string; variantId: string | null; button: PublicButton; name: string } | null;
+/** The selected rate: which group (item) and button (variant; for sign boards the item itself), and its pricing rule. */
+export type Selection = { itemId: string; variantId: string | null; button: PublicButton; name: string; rule: PricingRule } | null;
+
+/** "Choose this design" in the 3D Wallpaper gallery sends the design code to the calculator. */
+export const CHOOSE_DESIGN_EVENT = "mixprint:choose-design";
 
 export function RateButton({ button, selected, onSelect, wide = false }: { button: PublicButton; selected: boolean; onSelect: () => void; wide?: boolean }) {
   return (
@@ -62,7 +65,10 @@ export function CalculatorRow({
   minOrderMinor,
   hint = "Tap a rate",
   onAutoSelect,
+  fittingRateMinor = null,
+  askDesignCode = false,
 }: {
+  /** The section's rule; a selected button may use its own. */
   rule: PricingRule;
   selection: Selection;
   designChargeMinor: number;
@@ -70,6 +76,10 @@ export function CalculatorRow({
   hint?: string;
   /** A single-rate section (a sign board quality): CHECK without a click selects that rate. */
   onAutoSelect?: () => Selection;
+  /** 3D Wallpaper: fitting charges per sq ft (a fixed Fitting box with "Include fitting"). */
+  fittingRateMinor?: number | null;
+  /** 3D Wallpaper: a design code from the gallery. */
+  askDesignCode?: boolean;
 }) {
   const [unit, setUnit] = useState<SizeUnit>("ft-in");
   const [width, setWidth] = useState<SideText>(empty);
@@ -80,7 +90,19 @@ export function CalculatorRow({
   const [details, setDetails] = useState({ name: "", phone: "", city: "", note: "" });
   const [orderError, setOrderError] = useState<string | null>(null);
   const [placing, startPlacing] = useTransition();
+  const [includeFitting, setIncludeFitting] = useState(true);
+  const [designCode, setDesignCode] = useState("");
   const router = useRouter();
+  const activeRule = selection?.rule ?? rule;
+  const hasFitting = fittingRateMinor != null;
+
+  // "Choose this design" in the gallery fills the design code here.
+  useEffect(() => {
+    if (!askDesignCode) return;
+    const choose = (e: Event) => setDesignCode(String((e as CustomEvent<{ code: string }>).detail?.code ?? ""));
+    window.addEventListener(CHOOSE_DESIGN_EVENT, choose);
+    return () => window.removeEventListener(CHOOSE_DESIGN_EVENT, choose);
+  }, [askDesignCode]);
 
   const size = {
     unit,
@@ -88,7 +110,7 @@ export function CalculatorRow({
     height: { value: toNumber(height.value), inches: unit === "ft-in" ? toNumber(height.inches) : undefined },
   };
   // A result belongs to the exact size and rate it was checked with; any change asks for CHECK again.
-  const key = JSON.stringify([size, selection?.button.id, selection?.button.rateMinor]);
+  const key = JSON.stringify([size, selection?.button.id, selection?.button.rateMinor, includeFitting]);
   const quote = checked && checked.key === key ? checked.quote : null;
 
   function check() {
@@ -98,14 +120,20 @@ export function CalculatorRow({
       setError("Choose a rate first: click one of the rate buttons.");
       return;
     }
-    const result = quoteRate(size, { rule, rateMinor: chosen.button.rateMinor, designChargeMinor, minOrderMinor });
+    const result = quoteRate(size, {
+      rule: chosen.rule,
+      rateMinor: chosen.button.rateMinor,
+      designChargeMinor,
+      minOrderMinor,
+      fittingRateMinor: hasFitting && includeFitting ? fittingRateMinor : 0,
+    });
     if (!result.ok) {
       setError(result.error);
       setChecked(null);
       return;
     }
     setError(null);
-    setChecked({ quote: result.quote, key: JSON.stringify([size, chosen.button.id, chosen.button.rateMinor]) });
+    setChecked({ quote: result.quote, key: JSON.stringify([size, chosen.button.id, chosen.button.rateMinor, includeFitting]) });
   }
 
   function placeOrder(e: React.FormEvent) {
@@ -116,7 +144,15 @@ export function CalculatorRow({
     const whatsappTab = window.open("about:blank", "_blank");
     startPlacing(async () => {
       try {
-        const res = await placeRateOrderAction({ itemId: selection.itemId, variantId: selection.variantId ?? "", ...size, quantity: 1, ...details });
+        const res = await placeRateOrderAction({
+          itemId: selection.itemId,
+          variantId: selection.variantId ?? "",
+          ...size,
+          quantity: 1,
+          ...details,
+          includeFitting: hasFitting ? includeFitting : false,
+          designCode: askDesignCode ? designCode : "",
+        });
         if (!res.ok) {
           whatsappTab?.close();
           setOrderError(res.error);
@@ -160,7 +196,9 @@ export function CalculatorRow({
         <p className="grid place-items-center rounded-lg bg-sky-700 px-3 py-2 text-center text-sm font-black uppercase leading-snug tracking-wide text-white">
           Enter your size – check your price
         </p>
-        <div className="grid grid-cols-2 items-end gap-3 xl:grid-cols-[6.5rem_1.3fr_1.3fr_0.8fr_0.9fr_auto_1fr]">
+        <div
+          className={`grid grid-cols-2 items-end gap-3 ${hasFitting ? "xl:grid-cols-[6.5rem_1.3fr_1.3fr_0.8fr_0.9fr_0.9fr_auto_1fr]" : "xl:grid-cols-[6.5rem_1.3fr_1.3fr_0.8fr_0.9fr_auto_1fr]"}`}
+        >
           <label className="col-span-2 block xl:col-span-1">
             <span className="label">Unit</span>
             <select className="input" value={unit} onChange={(e) => setUnit(e.target.value as SizeUnit)} aria-label="Unit">
@@ -185,6 +223,22 @@ export function CalculatorRow({
               data-testid="calc-rate"
             />
           </label>
+          {hasFitting && (
+            <div className="block">
+              <label className="flex items-center gap-1.5 text-sm font-medium">
+                <input type="checkbox" checked={includeFitting} onChange={(e) => setIncludeFitting(e.target.checked)} data-testid="calc-include-fitting" />
+                Include fitting
+              </label>
+              <input
+                className={`input mt-1 cursor-not-allowed bg-surface font-bold ${includeFitting ? "" : "text-muted line-through"}`}
+                readOnly
+                aria-readonly
+                value={formatRateTag(fittingRateMinor ?? 0)}
+                aria-label="Fitting per sq ft"
+                data-testid="calc-fitting"
+              />
+            </div>
+          )}
           <label className="block">
             <span className="label">Designing Charges</span>
             <input className="input cursor-not-allowed bg-surface font-bold" readOnly aria-readonly value={formatRateTag(designChargeMinor)} aria-label="Designing Charges" data-testid="calc-design" />
@@ -201,7 +255,15 @@ export function CalculatorRow({
         </div>
       </div>
 
-      <p className="mt-2 text-xs text-muted">{rule === "STICKER" ? "Stickers: priced on our 4.5 ft wide media roll." : "Each side is charged to the next full foot."}</p>
+      {askDesignCode && (
+        <label className="mt-3 block max-w-xs">
+          <span className="label">Design code (optional, from the gallery)</span>
+          <input className="input uppercase" value={designCode} onChange={(e) => setDesignCode(e.target.value.toUpperCase())} placeholder="e.g. WP-012" maxLength={20} aria-label="Design code" data-testid="calc-design-code" />
+        </label>
+      )}
+      <p className="mt-2 text-xs text-muted" data-testid="calc-rule-note">
+        {ruleNote(activeRule)}
+      </p>
       {error && (
         <p className="field-error mt-2" role="alert">
           {error}
@@ -216,7 +278,9 @@ export function CalculatorRow({
             <Row label="Billable size" value={quote.billableText} testId="calc-billable" />
             <Row label="Billable sq ft" value={`${quote.sqftText} sq ft`} testId="calc-sqft" />
             <Row label="Rate" value={`${formatRs(quote.rateMinor)} per sq ft`} />
-            {quote.minimumApplied && <Row label="Printing (minimum order)" value={formatRs(quote.printingMinor)} />}
+            {askDesignCode && designCode && <Row label="Design" value={designCode} />}
+            {(quote.minimumApplied || hasFitting) && <Row label={quote.minimumApplied ? "Printing (minimum order)" : "Printing cost"} value={formatRs(quote.printingMinor)} testId="calc-printing" />}
+            {hasFitting && <Row label="Fitting cost" value={quote.fittingMinor > 0 ? `${formatRs(quote.fittingMinor)} (${formatRs(quote.fittingRateMinor)} per sq ft)` : "Not included"} testId="calc-fitting-cost" />}
             <Row label="Designing charges" value={formatRs(quote.designChargeMinor)} />
             <Row label="Total" value={formatRs(quote.totalMinor)} strong />
           </dl>

@@ -2,7 +2,7 @@ import Image from "next/image";
 import { ArticleBody } from "@/components/blog/article-body";
 import { JsonLd } from "@/components/catalog/json-ld";
 import { parseBlocks } from "@/lib/blog/content";
-import type { PublicRatePage } from "@/lib/rates/queries";
+import type { RateContent } from "@/lib/rates/queries";
 import { rateSectionsJsonLd } from "@/lib/rates/seo";
 import type { PublicSection } from "@/lib/rates/visibility";
 import { RateBar } from "./rate-calculator";
@@ -10,18 +10,19 @@ import { FlexSection, SignBoardQuality, StickerSection } from "./rate-section-vi
 
 // The rate sections of a service page (Admin → Rates): a blue title bar, rate buttons and the calculator.
 
-export function RateSections({ page, path }: { page: PublicRatePage; path: string }) {
+/** All rate sections of a page (its own and linked ones). `id="rates"` is where "Check price" links go. */
+export function RateSections({ content, path, withJsonLd = true }: { content: RateContent; path: string; withJsonLd?: boolean }) {
   return (
-    <div aria-label="Rates and price calculator" role="region" className="space-y-12" data-testid="rate-sections">
-      <JsonLd data={rateSectionsJsonLd(page.sections, path)} />
-      {page.intro && <p className="max-w-3xl text-lg text-muted">{page.intro}</p>}
-      {page.sections.map((section) =>
+    <div id="rates" aria-label="Rates and price calculator" role="region" className="scroll-mt-24 space-y-12" data-testid="rate-sections">
+      {withJsonLd && <JsonLd data={rateSectionsJsonLd(content.sections, path)} />}
+      {content.page?.intro && <p className="max-w-3xl text-lg text-muted">{content.page.intro}</p>}
+      {content.sections.map((section) =>
         section.kind === "FLEX" ? (
-          <FlexSection key={section.id} section={section} settings={page.settings} />
+          <FlexSection key={section.id} section={section} settings={content.settings} preselect={content.preselect[section.id]} />
         ) : section.kind === "STICKER" ? (
-          <StickerSection key={section.id} section={section} settings={page.settings} />
+          <StickerSection key={section.id} section={section} settings={content.settings} preselect={content.preselect[section.id]} />
         ) : (
-          <SignBoardSection key={section.id} section={section} page={page} />
+          <SignBoardSection key={section.id} section={section} content={content} />
         ),
       )}
     </div>
@@ -29,18 +30,19 @@ export function RateSections({ page, path }: { page: PublicRatePage; path: strin
 }
 
 /** Sign boards: the title bar, then one card per quality with its rate, features checklist, description and calculator. */
-function SignBoardSection({ section, page }: { section: PublicSection; page: PublicRatePage }) {
+function SignBoardSection({ section, content }: { section: PublicSection; content: RateContent }) {
+  const pre = content.preselect[section.id];
   return (
     <section aria-labelledby={`sec-${section.id}`} className="space-y-4" data-testid="rate-section">
       <RateBar id={`sec-${section.id}`}>{section.title}</RateBar>
       <div className="app-list grid gap-5">
         {section.groups.map((group) => (
-          <article key={group.id} className="card p-4 sm:p-6" aria-labelledby={`q-${group.id}`} data-testid="rate-quality">
+          <article key={group.id} className={`card p-4 sm:p-6 ${pre?.groupId === group.id ? "ring-2 ring-brand/60" : ""}`} aria-labelledby={`q-${group.id}`} data-testid="rate-quality">
             <h3 id={`q-${group.id}`} className="text-xl font-bold">
               {group.name}
             </h3>
             <div className="mt-3">
-              <SignBoardQuality section={section} groupId={group.id} settings={page.settings}>
+              <SignBoardQuality section={section} groupId={group.id} settings={content.settings} preselected={pre?.groupId === group.id}>
                 <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
                   {group.features.length > 0 && (
                     <ul className="space-y-1.5" aria-label={`What ${group.name} includes`}>

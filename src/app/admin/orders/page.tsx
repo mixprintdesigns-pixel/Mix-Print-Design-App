@@ -1,3 +1,4 @@
+import { perSqftCommissionLines } from "@/lib/affiliate/commission-lines";
 import Image from "next/image";
 import { recordOrderAction, updateOrderStatusAction, uploadOrderPhotoAction } from "@/app/admin/order-actions";
 import { ActionForm, SubmitButton } from "@/components/admin/action-form";
@@ -151,6 +152,11 @@ export default async function AdminOrdersPage() {
                           {o.commission && (
                             <span className="block text-muted">
                               {formatPKR(o.commission.amountMinor)} · {label(o.commission.status)}
+                              {perSqftCommissionLines(o.commission.breakdown).map((l) => (
+                                <span key={l.label} className="block text-xs">
+                                  {l.label}: {formatPKR(l.amountMinor)}
+                                </span>
+                              ))}
                             </span>
                           )}
                         </>

@@ -53,6 +53,7 @@ async function loadRows(): Promise<CategoryRow[]> {
       priceUnit: true,
       seoTitle: true,
       seoDescription: true,
+      ogImageUrl: true,
       parentId: true,
       _count: { select: { products: { where: visible } } },
     },

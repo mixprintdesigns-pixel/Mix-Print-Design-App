@@ -181,6 +181,40 @@ export async function createCommissionForOrder(orderId: string, referralCode: st
   });
 }
 
+/**
+ * Like createCommissionForOrder, but with an amount worked out by the caller: rate-calculator orders pay a fixed
+ * amount per billable sq ft (plus any big-order bonus). Lines are marked `perSqft`, so later changes to the order
+ * total or discount never reduce them.
+ */
+export async function createFixedCommissionForOrder(
+  orderId: string,
+  referralCode: string | null | undefined,
+  fixed: { baseAmountMinor: number; amountMinor: number; breakdown: Record<string, unknown>[] },
+) {
+  const existing = await prisma.affiliateCommission.findUnique({ where: { orderId } });
+  if (existing) return existing;
+  if (!referralCode) return null;
+  const [affiliate, order] = await Promise.all([findActiveAffiliate(referralCode), prisma.order.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, userId: true } })]);
+  if (!affiliate || affiliate.userId === order.userId) return null;
+  return prisma.$transaction(async (tx) => {
+    await tx.order.update({ where: { id: order.id }, data: { affiliateId: affiliate.id } });
+    return tx.affiliateCommission.create({
+      data: {
+        affiliateId: affiliate.id,
+        orderId: order.id,
+        baseAmountMinor: fixed.baseAmountMinor,
+        amountMinor: fixed.amountMinor,
+        breakdown: fixed.breakdown as unknown as Prisma.InputJsonValue,
+      },
+    });
+  });
+}
+
+/** True for commissions paid per sq ft (rate calculator orders): they are fixed when the order is placed. */
+export function isFixedCommission(breakdown: unknown): boolean {
+  return Array.isArray(breakdown) && breakdown.some((line) => (line as { perSqft?: boolean })?.perSqft === true);
+}
+
 /** Keeps commissions in step with the order: cancelled or refunded orders do not earn. */
 export async function onOrderStatusChanged(orderId: string, status: OrderStatus): Promise<void> {
   if (status !== "CANCELLED" && status !== "REFUNDED") return;
@@ -393,6 +427,7 @@ export async function listAffiliateCommissions(affiliateId: string, take = 50) {
       status: true,
       note: true,
       createdAt: true,
+      breakdown: true,
       order: { select: { number: true, placedAt: true } },
     },
   });

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { perSqftCommissionLines } from "@/lib/affiliate/commission-lines";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { CopyField, CopyLinkButton, PayoutForm, WithdrawButton } from "@/components/affiliate/dashboard-widgets";
@@ -235,7 +236,14 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/affiliate
                   <td className="py-2 font-mono">{c.order.number}</td>
                   <td className="py-2">{c.createdAt.toLocaleDateString("en-PK")}</td>
                   <td className="py-2">{formatPKR(c.baseAmountMinor)}</td>
-                  <td className="py-2 font-semibold">{formatPKR(c.amountMinor)}</td>
+                  <td className="py-2 font-semibold">
+                    {formatPKR(c.amountMinor)}
+                    {perSqftCommissionLines(c.breakdown).map((l) => (
+                      <span key={l.label} className="block text-xs font-normal text-muted">
+                        {l.label}: {formatPKR(l.amountMinor)}
+                      </span>
+                    ))}
+                  </td>
                   <td className="py-2">
                     <Badge status={c.status} />
                     {c.note && <span className="ml-2 text-xs text-muted">{c.note}</span>}

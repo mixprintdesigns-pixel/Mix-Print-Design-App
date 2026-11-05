@@ -15,6 +15,8 @@ export type CategoryRow = {
   priceUnit: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
+  /** Social share image (Admin → SEO); falls back to the cover image. */
+  ogImageUrl?: string | null;
   parentId: string | null;
   /** Published products directly in this category. */
   directProductCount: number;

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BUSINESS, quoteLink, whatsappLink } from "@/lib/business";
 import { CategoryCard } from "@/components/catalog/category-card";
 import { getCategoryTree } from "@/lib/catalog/queries";
+import { getPriceHints } from "@/lib/rates/queries";
 import { serviceUrl } from "@/lib/catalog/tree";
 import { getAboutContent } from "@/lib/content/about";
 import { getVisibleTeam } from "@/lib/content/team";
@@ -11,7 +12,7 @@ import { pageMetadata } from "@/lib/content/seo-pages";
 export const generateMetadata = () => pageMetadata("about");
 
 export default async function AboutPage() {
-  const [about, team, services] = await Promise.all([getAboutContent(), getVisibleTeam(), getCategoryTree()]);
+  const [about, team, services, hints] = await Promise.all([getAboutContent(), getVisibleTeam(), getCategoryTree(), getPriceHints()]);
   const initials = (name: string) =>
     name
       .split(/\s+/)
@@ -85,7 +86,7 @@ export default async function AboutPage() {
           </h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {services.map((s, i) => (
-              <CategoryCard key={s.id} category={s} href={serviceUrl(s.path)} index={i} />
+              <CategoryCard key={s.id} category={s} href={serviceUrl(s.path)} index={i} priceHint={hints[s.id]} />
             ))}
           </div>
         </section>
