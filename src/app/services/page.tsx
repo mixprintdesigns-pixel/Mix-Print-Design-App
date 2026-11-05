@@ -29,7 +29,7 @@ export default async function ServicesPage() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl space-y-10 px-4 py-12 app:space-y-3.5 app:py-6" data-testid="main-services">
+      <div className="app-grid mx-auto max-w-6xl space-y-10 px-4 py-12 app:py-6" data-testid="main-services">
         {services.length === 0 && <p className="text-muted">Services will appear here soon.</p>}
         {services.map((service, i) => (
           <section
@@ -38,26 +38,26 @@ export default async function ServicesPage() {
             aria-labelledby={`svc-${service.slug}`}
             data-testid="category-card"
           >
-            <Link href={serviceUrl(service.path)} className="block app:p-3 app:pr-0" tabIndex={-1} aria-hidden>
+            <Link href={serviceUrl(service.path)} className="app-tile-media block" tabIndex={-1} aria-hidden>
               <ServiceVisual
                 title={service.name}
                 imageUrl={service.imageUrl}
                 alt={service.imageAlt}
                 index={i}
                 priority={i === 0}
-                sizes="(min-width: 768px) 40vw, (display-mode: standalone) 120px, 100vw"
+                sizes="(min-width: 768px) 40vw, (display-mode: standalone) 50vw, 100vw"
                 className={APP_ROW_VISUAL}
-                initialsClassName="app:text-2xl"
+                initialsClassName="app:hidden"
               />
             </Link>
-            <div className="flex flex-col p-6 app:p-3 app:pl-4">
+            <div className="app-tile-body flex flex-col p-6">
               <h2 id={`svc-${service.slug}`} className="app-card-title text-2xl font-bold">
-                <Link href={serviceUrl(service.path)} className="hover:text-brand">
+                <Link href={serviceUrl(service.path)} className="app-tile-link hover:text-brand">
                   {service.name}
                 </Link>
               </h2>
-              {service.description && <p className="app-card-text mt-2 text-muted app:mt-1 app:line-clamp-2">{service.description}</p>}
-              <p className="mt-3 text-sm app:mt-2">
+              {service.description && <p className="app-card-text app-tile-hide mt-2 text-muted">{service.description}</p>}
+              <p className="app-tile-price mt-3 text-sm">
                 <CategoryPrice category={service} hint={hints[service.id]} />
               </p>
               {/* The installed app shows one action row instead (below) */}
@@ -68,7 +68,11 @@ export default async function ServicesPage() {
                 <QuoteButtons subject={service.name} />
               </div>
             </div>
-            <AppCardActions href={serviceUrl(service.path)} subject={service.name} className="app:col-span-2 app:px-3 app:pb-3" />
+            <AppCardActions
+              href={serviceUrl(service.path)}
+              subject={service.name}
+              priceOnRequest={!hints[service.id] && service.priceFromMinor == null}
+            />
           </section>
         ))}
       </div>

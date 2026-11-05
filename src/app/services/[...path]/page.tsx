@@ -164,7 +164,7 @@ async function ServiceDetail({
             <h2 id="types-heading" className="text-2xl font-bold">
               {node.name} types
             </h2>
-            <div className="app-list mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="app-grid mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {node.children.map((c, i) => (
                 <CategoryCard key={c.id} category={c} href={serviceUrl(c.path)} index={i + 1} priceHint={hints[c.id]} />
               ))}
@@ -182,7 +182,7 @@ async function ServiceDetail({
                 View in Products →
               </Link>
             </div>
-            <div className="app-list mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="app-grid mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {products.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
@@ -212,7 +212,7 @@ async function ServiceDetail({
             <h2 id="related-heading" className="text-2xl font-bold">
               Related services
             </h2>
-            <div className="app-list mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="app-grid mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {related.map((c, i) => (
                 <CategoryCard key={c.id} category={c} href={serviceUrl(c.path)} index={i + 2} priceHint={hints[c.id]} />
               ))}

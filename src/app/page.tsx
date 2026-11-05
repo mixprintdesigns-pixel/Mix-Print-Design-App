@@ -121,7 +121,7 @@ export default async function HomePage() {
               All services →
             </Link>
           </div>
-          <div className="app-list mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="app-grid mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {services.map((s, i) => (
               <div key={s.id} className="flex flex-col gap-2">
                 <CategoryCard category={s} href={serviceUrl(s.path)} index={i} priceHint={hints[s.id]} />
@@ -149,7 +149,7 @@ export default async function HomePage() {
             </Link>
           </div>
           {/* Swipeable row on phones, grid on larger screens */}
-          <div className="app-list -mx-4 mt-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
+          <div className="app-grid -mx-4 mt-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
             {featured.map((p) => (
               <div key={p.id} className="w-72 shrink-0 snap-start sm:w-auto">
                 <ProductCard product={p} />

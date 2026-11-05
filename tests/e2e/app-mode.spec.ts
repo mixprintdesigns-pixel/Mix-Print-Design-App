@@ -7,6 +7,28 @@ test.skip(({ isMobile }) => !isMobile, "The app runs on phones");
 
 const PRODUCT = "/products/offset-printing/business-cards/standard-business-cards";
 
+/** Two tall (about 3:4) photo cards per row, the whole card opens the item. */
+async function expectPhotoGrid(page: Page, cards: ReturnType<Page["locator"]>) {
+  const [a, b] = [(await cards.nth(0).boundingBox())!, (await cards.nth(1).boundingBox())!];
+  expect(Math.round(a.y)).toBe(Math.round(b.y)); // side by side
+  expect(b.x).toBeGreaterThan(a.x + a.width - 1);
+  expect(a.width).toBeLessThan(page.viewportSize()!.width / 2);
+  expect(a.height / a.width).toBeGreaterThan(1.25); // 3:4 is 1.33
+  expect(a.height / a.width).toBeLessThan(1.4);
+}
+
+/** No visible text in the app is smaller than 13px. */
+async function noTinyText(page: Page) {
+  const tiny = await page.evaluate(() =>
+    [...document.querySelectorAll("body *")]
+      .filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim()))
+      .filter((el) => el.getBoundingClientRect().width > 0 && !el.closest(".sr-only, [aria-hidden=true]"))
+      .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 13)
+      .map((el) => `${el.tagName} ${el.textContent!.trim().slice(0, 30)}`),
+  );
+  expect(tiny).toEqual([]);
+}
+
 async function noSideScroll(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 }
@@ -40,6 +62,14 @@ test("app: one logo, slim top bar, bottom tabs, bigger text, nothing wider than 
   expect(bar.y + bar.height).toBeCloseTo(page.viewportSize()!.height, 0);
 
   expect(await page.evaluate(() => parseFloat(getComputedStyle(document.body).fontSize))).toBeGreaterThanOrEqual(16.5);
+  // The bottom bar: about 72px, 28px icons, 13px labels, a pink pill behind the open tab's filled icon
+  expect(Math.round((await tabs.locator("ul").boundingBox())!.height)).toBe(72);
+  const homeTab = tabs.getByRole("link", { name: "Home" });
+  expect(Math.round((await homeTab.locator("svg").boundingBox())!.width)).toBe(28);
+  expect(await homeTab.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBe(13);
+  expect(await homeTab.locator("svg").getAttribute("fill")).toBe("currentColor"); // filled when open
+  expect(await tabs.getByRole("link", { name: "Services" }).locator("svg").getAttribute("fill")).toBe("none"); // outlined
+  await noTinyText(page);
   for (const button of await page.locator(".btn-primary, .btn-secondary").filter({ visible: true }).all()) {
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(47.5);
   }
@@ -49,13 +79,19 @@ test("app: one logo, slim top bar, bottom tabs, bigger text, nothing wider than 
   await tabs.getByRole("link", { name: "Products" }).click();
   await expect(page).toHaveURL(/\/products$/);
   await expect(tabs.getByRole("link", { name: "Products" })).toHaveAttribute("aria-current", "page");
-  // One full-width card per row, with a clear button
+  // Tall photo cards, two per row, with the round button in the corner
   const cards = page.getByTestId("product-card").filter({ visible: true });
-  const [a, b] = [(await cards.nth(0).boundingBox())!, (await cards.nth(1).boundingBox())!];
-  expect(Math.round(a.x)).toBe(Math.round(b.x));
-  expect(b.y).toBeGreaterThan(a.y + a.height - 1);
-  expect(a.width).toBeGreaterThan(page.viewportSize()!.width - 60);
-  await expect(cards.first().getByText("View / Order")).toBeVisible();
+  await expectPhotoGrid(page, cards);
+  await expect(cards.first().getByTestId("app-card-fab")).toBeVisible();
+  await noTinyText(page);
+  // Tapping anywhere on a card opens it
+  const first = cards.first();
+  const href = await first.getAttribute("href");
+  await first.scrollIntoViewIfNeeded();
+  const box = (await first.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 3, box.y + box.height / 3);
+  await expect(page).toHaveURL(new RegExp(`${href}$`));
+  await page.goBack();
   // Inputs never make the phone zoom in
   expect(await page.getByRole("searchbox").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
   await noSideScroll(page);
@@ -129,7 +165,7 @@ test("normal phone browser: the product page and lists are unchanged", async ({ 
   expect(await buyBar.evaluate((el) => getComputedStyle(el).position)).toBe("static");
   await expect(page.getByRole("navigation", { name: "App" })).toBeHidden();
   await page.goto("/products");
-  await expect(page.getByTestId("product-card").first().getByText("View / Order")).toBeHidden();
+  await expect(page.getByTestId("product-card").first().getByTestId("app-card-fab")).toBeHidden();
 });
 
 test("installed app (display-mode standalone, no ?app=1): app mode and the tab bar are on", async ({ page }) => {
@@ -157,7 +193,7 @@ test("the app starts at /?app=1 (manifest), keeping the same app id", async ({ r
   expect(manifest.display).toBe("standalone");
 });
 
-test("app home: compact header with search and chips, one action row per service card, readable text", async ({ page }) => {
+test("app home: compact header with search and chips, photo cards with one round button, readable text", async ({ page }) => {
   await page.goto("/?app=1");
   const header = page.getByTestId("app-home-header");
   await expect(header).toBeVisible();
@@ -167,18 +203,23 @@ test("app home: compact header with search and chips, one action row per service
 
   const cards = page.getByTestId("category-card").filter({ visible: true });
   expect(await cards.count()).toBeGreaterThan(0);
+  await expectPhotoGrid(page, cards);
   for (const card of await cards.all()) {
-    expect((await card.boundingBox())!.height).toBeLessThan(320); // compact, not a screen-high placeholder
-    await expect(card.getByRole("link", { name: /^View/ })).toBeVisible();
-    await expect(card.getByRole("link", { name: /on WhatsApp$/ })).toBeVisible();
-    expect((await card.getByRole("link", { name: /^View/ }).boundingBox())!.height).toBeGreaterThanOrEqual(47.5);
+    // One round 48px button: open the item, or WhatsApp when the price is on request
+    const fab = card.getByTestId("app-card-actions");
+    await expect(fab).toBeVisible();
+    expect(Math.round((await fab.boundingBox())!.height)).toBe(48);
+    await expect(fab).toHaveAccessibleName(/^(Open|Ask the price of) /);
   }
-  // No second "Get Quote" / "Order on WhatsApp" pair under the cards
+  // No second "Get Quote" / "Order on WhatsApp" pair under the cards, no long "View" buttons
   await expect(page.getByRole("link", { name: /^Get Quote/ }).filter({ visible: true })).toHaveCount(0);
+  await expect(cards.getByRole("link", { name: /^View/ }).filter({ visible: true })).toHaveCount(0);
 
   const size = (locator: ReturnType<typeof page.locator>) => locator.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-  expect(await size(cards.first().getByRole("heading"))).toBeGreaterThanOrEqual(18);
-  expect(await size(cards.first().locator("p").first())).toBeGreaterThanOrEqual(16);
+  expect(await size(cards.first().getByRole("heading"))).toBeGreaterThanOrEqual(17);
+  expect(await size(cards.first().getByRole("heading"))).toBeLessThanOrEqual(18);
+  // The name is white on the photo's dark gradient
+  expect(await cards.first().getByRole("heading").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 255, 255)");
   const sectionTitle = await size(page.locator("#services-heading"));
   expect(sectionTitle).toBeGreaterThanOrEqual(22);
   expect(sectionTitle).toBeLessThanOrEqual(24);

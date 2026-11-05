@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 // App mode only (hidden on the normal website): the bottom tab bar and the full-screen "More" sheet.
 // To add a page to the More sheet later, add one line to MORE_LINKS below.
@@ -64,6 +64,26 @@ export function MoreRow({ icon, children }: { icon: ReactNode; children: ReactNo
 
 const MORE_PATHS = [...MORE_LINKS.map((l) => l.href), "/account", "/login", "/register", "/admin"];
 
+/**
+ * Whether the More sheet is open. Kept outside the component: the bar is first shown as a placeholder while the
+ * page loads and then replaced, and a tap on More in that moment must not be lost.
+ */
+const moreSheet = (() => {
+  let open = false;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => open,
+    subscribe: (fn: () => void) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    set: (next: boolean | ((o: boolean) => boolean)) => {
+      open = typeof next === "function" ? next(open) : next;
+      listeners.forEach((fn) => fn());
+    },
+  };
+})();
+
 type TabBarProps = { account: ReactNode; social: ReactNode };
 
 export function AppTabBar(props: TabBarProps) {
@@ -76,7 +96,8 @@ export function AppTabBarFallback() {
 }
 
 function TabBar({ pathname, account, social }: TabBarProps & { pathname: string }) {
-  const [open, setOpen] = useState(false);
+  const open = useSyncExternalStore(moreSheet.subscribe, moreSheet.get, () => false);
+  const setOpen = moreSheet.set;
   const moreActive = pathname !== "" && MORE_PATHS.some((p) => pathname.startsWith(p));
 
   // Close the sheet when a page opens, and stop the page behind it from scrolling while it is open.
@@ -130,7 +151,7 @@ function TabBar({ pathname, account, social }: TabBarProps & { pathname: string 
       )}
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-surface/95 backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-surface shadow-[0_-4px_20px_rgb(0_0_0/0.08)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         aria-label="App"
       >
@@ -139,13 +160,9 @@ function TabBar({ pathname, account, social }: TabBarProps & { pathname: string 
             const active = !open && t.match(pathname);
             return (
               <li key={t.href}>
-                <Link
-                  href={t.href}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex h-full flex-col items-center justify-center gap-1 text-xs font-semibold ${active ? "text-brand" : "text-muted"}`}
-                >
-                  <span className={`grid h-8 w-14 place-items-center rounded-full ${active ? "bg-brand/15" : ""}`}>
-                    <AppIcon name={t.icon} />
+                <Link href={t.href} aria-current={active ? "page" : undefined} className={tabClass(active)}>
+                  <span className={pillClass(active)}>
+                    <TabIcon name={t.icon as TabIconName} filled={active} />
                   </span>
                   {t.label}
                 </Link>
@@ -153,15 +170,9 @@ function TabBar({ pathname, account, social }: TabBarProps & { pathname: string 
             );
           })}
           <li>
-            <button
-              type="button"
-              onClick={() => setOpen((o) => !o)}
-              aria-expanded={open}
-              aria-current={open || moreActive ? "page" : undefined}
-              className={`flex h-full w-full flex-col items-center justify-center gap-1 text-xs font-semibold ${open || moreActive ? "text-brand" : "text-muted"}`}
-            >
-              <span className={`grid h-8 w-14 place-items-center rounded-full ${open || moreActive ? "bg-brand/15" : ""}`}>
-                <AppIcon name="more" />
+            <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-current={open || moreActive ? "page" : undefined} className={`w-full ${tabClass(open || moreActive)}`}>
+              <span className={pillClass(open || moreActive)}>
+                <TabIcon name="more" filled={open || moreActive} />
               </span>
               More
             </button>
@@ -170,4 +181,72 @@ function TabBar({ pathname, account, social }: TabBarProps & { pathname: string 
       </nav>
     </div>
   );
+}
+
+// ─── Bottom bar icons: outlined, and filled when the tab is open ──────────────
+
+const tabClass = (active: boolean) =>
+  `flex h-full flex-col items-center justify-center gap-0.5 text-[13px] font-semibold leading-tight ${active ? "text-brand" : "text-stone-500 dark:text-stone-400"}`;
+const pillClass = (active: boolean) => `grid h-9 w-16 place-items-center rounded-full transition-colors ${active ? "bg-brand/15" : ""}`;
+
+type TabIconName = "home" | "services" | "products" | "earn" | "more";
+
+/** 28px tab icons: an outline, and a filled version for the open tab. */
+function TabIcon({ name, filled }: { name: TabIconName; filled: boolean }) {
+  const hole = { fill: "var(--surface)" };
+  const common = { viewBox: "0 0 24 24", className: "h-7 w-7", "aria-hidden": true } as const;
+  const line = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+  switch (name) {
+    case "home":
+      return filled ? (
+        <svg {...common} fill="currentColor">
+          <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
+          <path d="M10 21v-5.5h4V21z" style={hole} />
+        </svg>
+      ) : (
+        <svg {...common} {...line}>
+          <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />
+        </svg>
+      );
+    case "services":
+      return (
+        <svg {...common} {...(filled ? { fill: "currentColor" } : line)}>
+          <rect x="3.5" y="3.5" width="7.5" height="7.5" rx="2" />
+          <rect x="13" y="3.5" width="7.5" height="7.5" rx="2" />
+          <rect x="3.5" y="13" width="7.5" height="7.5" rx="2" />
+          <rect x="13" y="13" width="7.5" height="7.5" rx="2" />
+        </svg>
+      );
+    case "products":
+      return filled ? (
+        <svg {...common}>
+          <path d="M5 8h14l1.2 12.2a1 1 0 0 1-1 1.1H4.8a1 1 0 0 1-1-1.1z" fill="currentColor" />
+          <path d="M9 8V7a3 3 0 0 1 6 0v1" {...line} />
+        </svg>
+      ) : (
+        <svg {...common} {...line}>
+          <path d="M5 8h14l1.2 12.2a1 1 0 0 1-1 1.1H4.8a1 1 0 0 1-1-1.1zM9 8V7a3 3 0 0 1 6 0v1" />
+        </svg>
+      );
+    case "earn":
+      return filled ? (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9.5" fill="currentColor" />
+          <path d="M12 6.5v11M14.8 9c0-1-1.2-1.8-2.8-1.8S9.2 8 9.2 9s1.2 1.6 2.8 1.9 2.8.9 2.8 1.9-1.2 1.9-2.8 1.9-2.8-.8-2.8-1.9" fill="none" strokeWidth={1.9} strokeLinecap="round" style={{ stroke: "var(--surface)" }} />
+        </svg>
+      ) : (
+        <svg {...common} {...line}>
+          <circle cx="12" cy="12" r="9.5" />
+          <path d="M12 6.5v11M14.8 9c0-1-1.2-1.8-2.8-1.8S9.2 8 9.2 9s1.2 1.6 2.8 1.9 2.8.9 2.8 1.9-1.2 1.9-2.8 1.9-2.8-.8-2.8-1.9" />
+        </svg>
+      );
+    case "more":
+      return (
+        <svg {...common} {...(filled ? { fill: "currentColor" } : line)}>
+          <circle cx="5" cy="12" r="2.2" />
+          <circle cx="12" cy="12" r="2.2" />
+          <circle cx="19" cy="12" r="2.2" />
+        </svg>
+      );
+  }
 }

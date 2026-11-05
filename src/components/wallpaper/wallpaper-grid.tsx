@@ -26,7 +26,7 @@ export function WallpaperGrid({ designs }: { designs: PublicWallpaperDesign[] })
 
   return (
     <>
-      <ul className="app-list mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <ul className="app-grid mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {designs.map((d) => (
           <li key={d.id} className="card overflow-hidden" data-testid="wallpaper-design">
             <button type="button" className="relative block aspect-[4/3] w-full bg-background" onClick={() => setOpen({ design: d, image: 0 })} aria-label={`View ${d.code} ${d.title} larger`}>

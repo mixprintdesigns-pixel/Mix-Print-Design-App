@@ -84,7 +84,7 @@ export default async function AboutPage() {
           <h2 id="services-overview-heading" className="text-2xl font-bold">
             What we do
           </h2>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="app-grid mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {services.map((s, i) => (
               <CategoryCard key={s.id} category={s} href={serviceUrl(s.path)} index={i} priceHint={hints[s.id]} />
             ))}

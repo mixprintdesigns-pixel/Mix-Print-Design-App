@@ -167,7 +167,7 @@ async function CategoryView({
           <h2 id="related-categories" className="text-xl font-bold">
             Related categories
           </h2>
-          <div className="app-list mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="app-grid mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {related.map((c, i) => (
               <CategoryCard key={c.id} category={c} href={categoryUrl(c.path)} index={i} priceHint={hints[c.id]} />
             ))}
@@ -312,7 +312,7 @@ async function ProductView({ product, category, tree, canonical }: { product: Pr
           <h2 id="related-products" className="text-xl font-bold">
             Related products
           </h2>
-          <div className="app-list mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="app-grid mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {related.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}

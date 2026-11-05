@@ -3,24 +3,36 @@ import { WhatsAppIcon } from "@/components/icons/social-icons";
 import { whatsappLink } from "@/lib/business";
 
 /**
- * App mode only (hidden on the normal website): the one action row of a service card, a big full-width "View"
- * button and a small WhatsApp icon button next to it. Replaces the website's "Get Quote" / "Order on WhatsApp" pair.
+ * App mode only (hidden on the normal website): the round button in the bottom-right corner of a photo card.
+ * It opens the item, or WhatsApp for items whose price is on request. (Tapping anywhere else on the card also
+ * opens the item.)
  */
-export function AppCardActions({ href, subject, className = "" }: { href: string; subject: string; className?: string }) {
-  return (
-    <div className={`hidden items-center gap-2 app:flex ${className}`} data-testid="app-card-actions">
-      <Link href={href} className="btn-primary flex-1">
-        View<span className="sr-only"> {subject}</span>
-      </Link>
+export function AppCardActions({ href, subject, priceOnRequest = false }: { href: string; subject: string; priceOnRequest?: boolean }) {
+  if (priceOnRequest) {
+    return (
       <a
         href={whatsappLink(`Assalam o Alaikum! I'd like a quote for ${subject}.`)}
         target="_blank"
         rel="noopener noreferrer"
-        className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-green-600 text-green-700 dark:text-green-400"
-        aria-label={`Order ${subject} on WhatsApp`}
+        className="app-fab app-fab-wa hidden"
+        aria-label={`Ask the price of ${subject} on WhatsApp`}
+        data-testid="app-card-actions"
       >
         <WhatsAppIcon className="h-6 w-6" />
       </a>
-    </div>
+    );
+  }
+  return (
+    <Link href={href} className="app-fab hidden" aria-label={`Open ${subject}`} data-testid="app-card-actions">
+      <ArrowIcon />
+    </Link>
+  );
+}
+
+export function ArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
   );
 }
